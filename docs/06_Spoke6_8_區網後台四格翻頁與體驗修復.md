@@ -1,6 +1,6 @@
 # Spoke 6.8：區網後台、四格分組翻頁、文件夾匯出與實機體驗修復紀錄 (`v0.4.0`)
 
-> **版本編號**：`v0.4.0`（`versionCode = 7`）  
+> **版本編號**：`v0.4.0`（`versionCode = 7`）→ **`v0.4.1`（`versionCode = 8`）**  
 > **實作日期**：2026-11-27  
 > **測試裝置**：OPPO R11s Plus（`CPH1721` / Android 7.1.1 / API 25 / ColorOS 3.2 / Serial `7637c621`）
 
@@ -38,22 +38,37 @@
 - `app/src/main/kotlin/com/cs22study/seethere/data/PublicDocumentsStorage.kt`
 - `app/src/main/kotlin/com/cs22study/seethere/data/LocalRotatingLogger.kt`
 - `app/src/main/kotlin/com/cs22study/seethere/server/SeeThereLanWebServer.kt`
+- `app/src/main/kotlin/com/cs22study/seethere/service/SeeThereLanService.kt`
+- `app/src/main/AndroidManifest.xml`
 - `app/src/main/kotlin/com/cs22study/seethere/data/PreferencesRepository.kt`
 - `app/src/main/kotlin/com/cs22study/seethere/ui/SeeThereViewModel.kt`
 - `app/src/main/kotlin/com/cs22study/seethere/MainActivity.kt`
 - `app/src/main/kotlin/com/cs22study/seethere/ui/HomeScreen.kt`
+- `app/src/test/kotlin/com/cs22study/seethere/SeeThereAppSmokeTest.kt`
 - `app/build.gradle.kts`
 
 ---
 
-## 三、 自動化測試與實機部署驗證結果
+## 三、 `v0.4.1` 實機補充修正重點
+
+1. **OPPO 窄螢幕 2×2 四宮格右箭頭被擠出畫面修復**
+   - 原因：`QuadWallGrid` 頂部翻頁列中間標題 `Text` 未設定 `Modifier.weight(1f)`，在 OPPO 窄螢幕直立時將右側 `▶` `IconButton` 推擠至畫面外。
+   - 解法：為中間標題加上 `Modifier.weight(1f).padding(horizontal = 4.dp)` 與置中對齊，並調整左右按鈕為 `36.dp`，確保左右切換箭頭於手機窄螢幕皆完整顯示且可點擊。
+2. **區網後台「資安檢查並新增播放」無反應修復與保活加強**
+   - 新增前景保活服務 `SeeThereLanService`（常駐通知顯示區網網址），避免 ColorOS 休眠／鎖屏凍結 `ServerSocket` 導致瀏覽器 `fetch` 斷線。
+   - 將 `SeeThereLanWebServer` JSON 編解碼改為純 Kotlin 實作（移除 JVM 測試易受 Android Stub 影響的 `org.json` 依賴，並安全捕捉 `Throwable` 與 `OPTIONS`），避免伺服器異常關閉連線。
+   - 前端管理頁加入「檢查與傳送中...」按鈕鎖定、10 秒 `AbortController` 逾時保護、`try / catch` 錯誤捕捉，以及按鈕下方緊鄰顯示的 `#addMsg` / `#importMsg` 結果框，確保任何成功、資安攔截或手機斷線都能即時提示。
+
+---
+
+## 四、 自動化測試與實機部署驗證結果 (`v0.4.1`)
 
 - **Gradle 建置與測試**：`powershell -ExecutionPolicy Bypass -File scripts/gradle-win.ps1 :core-stream:test :app:testDebugUnitTest :app:assembleRelease` 通過（`BUILD SUCCESSFUL`）。
   - `:core-stream:test`：**26 項全數通過**（0 失敗、0 錯誤、0 略過）：`CameraCodecAndLogTest` (4)、`CameraNavigatorTest` (3)、`ExternalSearchParsersTest` (3)、`GeoSpatialEngineTest` (5)、`StreamSecuritySanitizerTest` (9)、`WraDisasterParserTest` (2)。
-  - `:app:testDebugUnitTest`：**1 項通過**（`SeeThereAppSmokeTest`，0 失敗、0 錯誤、0 略過）。
-  - 總計 **27 項自動化單元測試 100% 通過**。
+  - `:app:testDebugUnitTest`：**2 項全數通過**（0 失敗、0 錯誤、0 略過），含 `SeeThereAppSmokeTest.lanWebServerAddsYouTubeCameraOverHttpPost`（真實 HTTP POST 新增 YouTube `https://www.youtube.com/watch?v=ipbHUjTeUIw`＋中文標題「富士山急行線河口湖駅前」＋`javascript:alert(1)` 攔截 400 驗證）。
+  - 總計 **28 項自動化單元測試 100% 通過**。
 - **Release APK（持久化 `v1 + v2` 簽章）**：
-  - `app-arm64-v8a-release.apk`：2.22 MB（2,332,078 bytes）
-  - `app-armeabi-v7a-release.apk`：2.22 MB（2,331,773 bytes）
-  - `app-universal-release.apk`：2.24 MB（2,346,283 bytes）
-- **OPPO R11s Plus（`7637c621`）實機推送**：`adb -s 7637c621 install -r` 成功安裝並啟動 `.MainActivity`，同步推送 `/sdcard/Download/SeeThere-v0.4.0-arm64-v8a.apk`。
+  - `app-arm64-v8a-release.apk`：2.23 MB（2,334,616 bytes）
+  - `app-armeabi-v7a-release.apk`：2.23 MB（2,334,299 bytes）
+  - `app-universal-release.apk`：2.24 MB（2,348,818 bytes）
+- **OPPO R11s Plus（`7637c621`）實機推送**：`adb -s 7637c621 install -r` 成功升級至 `versionCode=8` / `versionName=0.4.1` 並啟動 `.MainActivity`，同步推送 `/sdcard/Download/SeeThere-v0.4.1-arm64-v8a.apk`。

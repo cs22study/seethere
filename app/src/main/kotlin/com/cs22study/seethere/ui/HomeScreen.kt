@@ -628,35 +628,36 @@ private fun QuadWallGrid(
                     .background(Color(0xFF0F172A), RoundedCornerShape(6.dp))
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 IconButton(
                     onClick = onQuadPrevPage,
                     enabled = totalPages > 1,
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                         contentDescription = "上一組 4 格",
-                        tint = Color(0xFFFACC15),
+                        tint = if (totalPages > 1) Color(0xFFFACC15) else Color(0xFF475569),
                     )
                 }
                 Text(
-                    text = "四宮格 第 ${currentPage + 1}/$totalPages 頁（左右滑或按箭頭換 4 格）",
+                    text = "四宮格 ${currentPage + 1}/$totalPages 頁（左右滑換 4 格）",
                     color = Color(0xFFCBD5E1),
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                 )
                 IconButton(
                     onClick = onQuadNextPage,
                     enabled = totalPages > 1,
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = "下一組 4 格",
-                        tint = Color(0xFFFACC15),
+                        tint = if (totalPages > 1) Color(0xFFFACC15) else Color(0xFF475569),
                     )
                 }
             }

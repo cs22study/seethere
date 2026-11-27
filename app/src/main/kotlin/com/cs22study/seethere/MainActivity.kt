@@ -30,6 +30,7 @@ import com.cs22study.seethere.core.StreamSecuritySanitizer
 import com.cs22study.seethere.server.SeeThereLanWebServer
 import com.cs22study.seethere.service.ScreenCaptureService
 import com.cs22study.seethere.service.ScreenshotStorageHelper
+import com.cs22study.seethere.service.SeeThereLanService
 import com.cs22study.seethere.ui.PlayerViewMode
 import com.cs22study.seethere.ui.SeeThereHomeScreen
 import com.cs22study.seethere.ui.SeeThereViewModel
@@ -158,6 +159,7 @@ class MainActivity : ComponentActivity() {
                     onWithDocumentsPermission = runWithDocumentsPermission,
                     onExitApp = {
                         SeeThereLanWebServer.stop()
+                        SeeThereLanService.stop(applicationContext)
                         finishAndRemoveTask()
                     },
                 )

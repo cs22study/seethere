@@ -23,6 +23,7 @@ import com.cs22study.seethere.data.PublicDocumentsStorage
 import com.cs22study.seethere.data.db.AppDatabase
 import com.cs22study.seethere.data.db.CameraEntity
 import com.cs22study.seethere.server.SeeThereLanWebServer
+import com.cs22study.seethere.service.SeeThereLanService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -611,6 +612,9 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
                     )
                     dao.upsert(CameraEntity.fromDomain(item))
                     _selectedCameraId.value = item.id
+                    logger.info("LanWeb", "ADD_CAM", "Added ${item.id} (${item.title})")
+                    _lastSettingsNotice.value = "🌐 區網新增並播放：${item.title}"
+                    showBanner("區網已新增並播放：${item.title}")
                     true to "已新增並播放：${item.title}"
                 }
 
@@ -627,6 +631,7 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
                 override fun onLanPlayCamera(cameraId: String): Boolean {
                     val target = activeCameras.value.firstOrNull { it.id == cameraId } ?: return false
                     _selectedCameraId.value = target.id
+                    logger.info("LanWeb", "PLAY_CAM", "Switched to ${target.id} (${target.title})")
                     return true
                 }
             }
@@ -634,12 +639,14 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
             SeeThereLanWebServer.start(port, listener)
                 .onSuccess { url ->
                     _lanServerUrl.value = url
+                    SeeThereLanService.start(getApplication(), url)
                     logger.info("LanWeb", "START", "LAN Web Server started at $url")
                     _lastSettingsNotice.value = "🌐 區網後台已啟動：$url"
                     showBanner("區網管理已啟動：$url")
                 }
                 .onFailure { ex ->
                     _lanServerUrl.value = null
+                    SeeThereLanService.stop(getApplication())
                     showBanner("啟動失敗 (Port $port 可能被佔用)：${ex.localizedMessage}")
                 }
         }
@@ -647,6 +654,7 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
 
     fun stopLanServer() {
         SeeThereLanWebServer.stop()
+        SeeThereLanService.stop(getApplication())
         _lanServerUrl.value = null
         logger.info("LanWeb", "STOP", "LAN Web Server stopped")
         _lastSettingsNotice.value = "區網管理伺服器已停止"
@@ -692,6 +700,7 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
 
     override fun onCleared() {
         SeeThereLanWebServer.stop()
+        SeeThereLanService.stop(getApplication())
         super.onCleared()
     }
 
