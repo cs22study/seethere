@@ -1,0 +1,2 @@
+-keep class com.cs22study.seethere.core.** { *; }
+-keepattributes *Annotation*

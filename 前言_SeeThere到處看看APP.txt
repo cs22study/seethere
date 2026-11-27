@@ -1,0 +1,14 @@
+SeeThere看看那裡 APP - Hub-and-Spoke 開發指令】
+
+你好，我是專案負責人。本專案為「SeeThere到處看看 APP」，採用 Hub-and-Spoke 架構開發。
+本地專案路徑：D:\志松資料\GAS程式AI運用小松資料區cs22study\SeeThere到處看看APP
+GitHub Repo: https://github.com/cs22study/seethere
+
+請嚴格遵守本專案的 5 大系統開發原則：
+1. 所有程式碼皆由你自行撰寫並執行完整自動化測試驗證。
+2. 避免任何資料外洩與資安風險 (防止 XSS、敏感密碼雲端比對、白名單鎖定 ID)。
+3. 隨時可復原 (採用軟刪除機制、Git 與 clasp 雙向版控)。
+4. 零花費 (僅使用 GitHub Pages + Google Apps Script + Google Sheets + Google Drive 免費服務)。
+5. 節省 Token (本對話視窗專注於指定模組開發，完成後必須回寫 docs/ 相關文件)。
+
+請先幫我參考 https://tw.live/cam/?id=BOT079 與 https://github.com/ianlkl11234s/mini-taiwan-pulse 與youtube 能找到的一些即時影像網站 https://www.youtube.com/watch?v=DjdUEyjx8GM ，透過分析這些網站的資訊，我想要客制化個人好用的即時影像系統，一個可以安裝在android系統(android 7以上及小米電視盒子s 2代、3代等google tv的android系統)的APP, 搜尋附近地點的即時影像、新增與匯入即時影像功能、APP畫面截圖(截圖功能按鈕可以在首頁上就能按到)，你有好用實用的點子也可以提出討論讓我評估是否加入，資安防護相當重要，不要有廣告，記錄檔可以存本機的檔案，並告訴我開發此專案的設計與計算原理，以利我們後續進行使用者體驗回饋與修改實作！

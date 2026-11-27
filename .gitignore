@@ -1,0 +1,42 @@
+# Gradle & Android
+.gradle/
+build/
+*/build/
+**/build/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Signing & Secrets (Principle 2: Security)
+keystore/
+*.keystore
+*.jks
+*.pem
+*.p12
+.env
+.env.*
+credentials.json
+service-account*.json
+.clasprc.json
+.clasp.json
+
+# IDE & Editors
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node / Optional Web / Tooling
+node_modules/
+npm-debug.log*
+
+# Temp / Logs
+*.log
+*.tmp
+tmp/
+scratch/
