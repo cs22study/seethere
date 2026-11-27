@@ -36,9 +36,16 @@
 
 ---
 
-## 3. 自動化測試與建置驗證結果
+## 3. 自動化測試與建置驗證結果 (`v0.2.1`)
 
+### 3.1 `v0.2.1` YouTube 錯誤 153 修復（參照 `androidtv-news-fork620`）
+- **根因**：`WebView.loadUrl("https://www.youtube-nocookie.com/embed/...")` 直接載入時缺少 HTTP `Referer` 與 `origin`，遭 YouTube 播放器回傳「錯誤 153」。
+- **雙重修復**（[StreamSecuritySanitizer.kt](../core-stream/src/main/kotlin/com/cs22study/seethere/core/StreamSecuritySanitizer.kt)、[PlayerComponents.kt](../app/src/main/kotlin/com/cs22study/seethere/ui/PlayerComponents.kt)）：
+  1. **合法 Referer 內嵌（主通道）**：透過 `buildSafeYouTubeIframeHtml()` 搭配 `loadDataWithBaseURL("https://com.cs22study.seethere/", ...)`、`strict-origin-when-cross-origin`、開啟第三方 Cookie、`WebChromeClient` 與移除 `; wv)` 之標準 Chrome User-Agent。
+  2. **`fork620` 直連備援（次通道）**：參考 `androidtv-news-fork620` 的 `WebViewHelper.kt`，左下角提供「直連」切換按鈕，載入 `youtube.com/watch?v=` 並將 `<video>` 自動靜音播放且置頂全幅顯示。
+
+### 3.2 自動化測試
 執行 `scripts/gradle-win.ps1 :core-stream:test :app:testDebugUnitTest :app:assembleDebug` 結果：
-- `:core-stream:test`：**19 項 JUnit 5 測試全數通過**（`StreamSecuritySanitizerTest` 8 項、`GeoSpatialEngineTest` 5 項、`CameraCodecAndLogTest` 4 項、`WraDisasterParserTest` 2 項）。
+- `:core-stream:test`：**20 項 JUnit 5 測試全數通過**（`StreamSecuritySanitizerTest` 9 項、`GeoSpatialEngineTest` 5 項、`CameraCodecAndLogTest` 4 項、`WraDisasterParserTest` 2 項）。
 - `:app:testDebugUnitTest`：**1 項測試通過**（`SeeThereAppSmokeTest`）。
-- `:app:assembleDebug`：`v0.2.0` 三架構 Debug APK 建置成功。
+- `:app:assembleDebug`：`v0.2.1` 三架構 Debug APK 建置成功。

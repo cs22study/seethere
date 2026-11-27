@@ -16,7 +16,8 @@
   - [x] 電視牆 **2×2 四宮格同時監看** ＋ **電子風景窗 30 秒自動輪播模式**
   - [x] 水利署防災影像（`opendata.wra.gov.tw` API v2）動態加密序號即時解析與 10 分鐘快取（示範：`wra_17457`）
   - [x] **起迄路線沿途影像搜尋**（`Corridor Search`）
-  - [x] 20 項自動化單元測試全數通過（`:core-stream:test` 19 項 + `:app:testDebugUnitTest` 1 項）並產出 `v0.2.0` Debug APK
+  - [x] **YouTube 錯誤 153 修復 (`v0.2.1`)**：`loadDataWithBaseURL` + `strict-origin-when-cross-origin` + `fork620` 直連 `<video>` 置頂切換備援
+  - [x] 21 項自動化單元測試全數通過（`:core-stream:test` 20 項 + `:app:testDebugUnitTest` 1 項）並產出 `v0.2.1` Debug APK
 
 ---
 

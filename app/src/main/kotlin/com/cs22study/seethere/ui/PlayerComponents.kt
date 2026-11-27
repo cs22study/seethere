@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -121,6 +123,7 @@ fun StreamPlayerBox(
         }
         StreamProtocol.YOUTUBE -> {
             IsolatedYouTubeWebView(
+                videoId = sanitized.extractedYouTubeId.orEmpty(),
                 embedUrl = sanitized.normalizedUrl,
                 modifier = modifier,
             )
@@ -258,44 +261,126 @@ private fun HlsExoPlayerView(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun IsolatedYouTubeWebView(
+    videoId: String,
     embedUrl: String,
     modifier: Modifier = Modifier,
 ) {
-    AndroidView(
-        factory = { ctx ->
-            WebView(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                )
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.mediaPlaybackRequiresUserGesture = false
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                @Suppress("DEPRECATION")
-                settings.savePassword = false
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        val target = request?.url?.toString() ?: return true
-                        return !StreamSecuritySanitizer.isAllowedInYouTubeSandbox(target)
+    var useDirectWatchMode by remember(videoId) { mutableStateOf(false) }
+    val loadKey = "$videoId:$useDirectWatchMode"
+
+    Box(modifier = modifier.background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    )
+                    CookieManager.getInstance().let { cm ->
+                        cm.setAcceptCookie(true)
+                        cm.setAcceptThirdPartyCookies(this, true)
+                    }
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.textZoom = 100
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+                    settings.userAgentString = settings.userAgentString.replace("; wv)", ")")
+                    @Suppress("DEPRECATION")
+                    settings.savePassword = false
+                    webChromeClient = WebChromeClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            val target = request?.url?.toString() ?: return true
+                            return !StreamSecuritySanitizer.isAllowedInYouTubeSandbox(target)
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            if (url != null && url.startsWith("https://www.youtube.com/watch")) {
+                                // Inspired by fork620 WebViewHelper: isolate & fullscreen <video> element cleanly
+                                val js = """
+                                    (function() {
+                                      var tries = 0;
+                                      var timer = setInterval(function() {
+                                        tries++;
+                                        var v = document.querySelector('video');
+                                        if (v) {
+                                          v.muted = true;
+                                          v.play().catch(function(){});
+                                          v.style.position = 'fixed';
+                                          v.style.top = '0';
+                                          v.style.left = '0';
+                                          v.style.zIndex = '999999';
+                                          v.style.width = '100%';
+                                          v.style.height = '100%';
+                                          v.style.objectFit = 'contain';
+                                          v.style.background = '#000';
+                                          document.body.appendChild(v);
+                                          clearInterval(timer);
+                                        }
+                                        if (tries > 12) clearInterval(timer);
+                                      }, 500);
+                                    })();
+                                """.trimIndent()
+                                view?.evaluateJavascript(js, null)
+                            }
+                        }
                     }
                 }
-                loadUrl(embedUrl)
+            },
+            update = { webView ->
+                if (webView.tag != loadKey) {
+                    webView.tag = loadKey
+                    if (useDirectWatchMode && videoId.isNotBlank()) {
+                        webView.loadUrl(
+                            "https://www.youtube.com/watch?v=$videoId",
+                            mapOf("Referer" to "https://www.youtube.com/"),
+                        )
+                    } else if (videoId.isNotBlank()) {
+                        val html = StreamSecuritySanitizer.buildSafeYouTubeIframeHtml(
+                            videoId = videoId,
+                            originUrl = "https://com.cs22study.seethere",
+                        )
+                        webView.loadDataWithBaseURL(
+                            "https://com.cs22study.seethere/",
+                            html,
+                            "text/html",
+                            "UTF-8",
+                            null,
+                        )
+                    } else {
+                        webView.loadUrl(embedUrl, mapOf("Referer" to "https://com.cs22study.seethere/"))
+                    }
+                }
+            },
+            onRelease = { webView ->
+                webView.stopLoading()
+                webView.loadUrl("about:blank")
+                webView.destroy()
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        if (videoId.isNotBlank()) {
+            OutlinedButton(
+                onClick = { useDirectWatchMode = !useDirectWatchMode },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+            ) {
+                Text(
+                    if (useDirectWatchMode) "內嵌" else "直連",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
-        },
-        update = { webView ->
-            if (webView.url != embedUrl) {
-                webView.loadUrl(embedUrl)
-            }
-        },
-        onRelease = { webView ->
-            webView.stopLoading()
-            webView.loadUrl("about:blank")
-            webView.destroy()
-        },
-        modifier = modifier,
-    )
+        }
+    }
 }
 
 @Composable

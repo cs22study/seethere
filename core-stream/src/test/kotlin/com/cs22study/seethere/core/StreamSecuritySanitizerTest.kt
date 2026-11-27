@@ -79,10 +79,19 @@ class StreamSecuritySanitizerTest {
 
     @Test
     fun `youtube WebView sandbox only permits allowlisted HTTPS media hosts`() {
+        assertTrue(StreamSecuritySanitizer.isAllowedInYouTubeSandbox("https://com.cs22study.seethere/"))
         assertTrue(StreamSecuritySanitizer.isAllowedInYouTubeSandbox("https://www.youtube-nocookie.com/embed/DjdUEyjx8GM"))
         assertTrue(StreamSecuritySanitizer.isAllowedInYouTubeSandbox("https://rr3---sn-ogueln7s.googlevideo.com/videoplayback"))
         assertFalse(StreamSecuritySanitizer.isAllowedInYouTubeSandbox("https://evil-ad-network.example/click"))
         assertFalse(StreamSecuritySanitizer.isAllowedInYouTubeSandbox("http://www.youtube-nocookie.com/embed/DjdUEyjx8GM"))
+    }
+
+    @Test
+    fun `builds safe YouTube iframe html with strict origin referrer policy for Error 153 prevention`() {
+        val html = StreamSecuritySanitizer.buildSafeYouTubeIframeHtml("DjdUEyjx8GM")
+        assertTrue(html.contains("https://www.youtube-nocookie.com/embed/DjdUEyjx8GM"))
+        assertTrue(html.contains("strict-origin-when-cross-origin"))
+        assertTrue(html.contains("origin=https://com.cs22study.seethere"))
     }
 
     @Test

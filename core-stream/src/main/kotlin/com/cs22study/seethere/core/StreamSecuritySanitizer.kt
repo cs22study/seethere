@@ -28,9 +28,11 @@ object StreamSecuritySanitizer {
     )
 
     private val WEBVIEW_MEDIA_HOST_ALLOWLIST = setOf(
+        "com.cs22study.seethere",
         "www.youtube-nocookie.com",
         "youtube-nocookie.com",
         "www.youtube.com",
+        "m.youtube.com",
         "youtube.com",
         "i.ytimg.com",
         "s.ytimg.com",
@@ -164,6 +166,40 @@ object StreamSecuritySanitizer {
         val host = uri.host?.lowercase(Locale.ROOT)?.trimEnd('.') ?: return false
         if (host in WEBVIEW_MEDIA_HOST_ALLOWLIST) return true
         return host.endsWith(".googlevideo.com") || host.endsWith(".ytimg.com")
+    }
+
+    /**
+     * Builds a sanitized HTML wrapper with strict HTTPS Referer policy to prevent YouTube Error 153 in Android WebView.
+     */
+    fun buildSafeYouTubeIframeHtml(
+        videoId: String,
+        originUrl: String = "https://com.cs22study.seethere",
+    ): String {
+        require(YOUTUBE_ID_REGEX.matches(videoId)) { "Invalid YouTube video ID" }
+        val safeSrc = "https://www.youtube-nocookie.com/embed/$videoId" +
+            "?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=$originUrl"
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+              <meta name="referrer" content="strict-origin-when-cross-origin">
+              <style>
+                html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
+                iframe { border:0; width:100%; height:100%; display:block; }
+              </style>
+            </head>
+            <body>
+              <iframe
+                src="$safeSrc"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allow="autoplay; encrypted-media; picture-in-picture"
+                allowfullscreen>
+              </iframe>
+            </body>
+            </html>
+        """.trimIndent()
     }
 
     /**
