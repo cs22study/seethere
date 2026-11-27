@@ -1,0 +1,17 @@
+{
+  "name": "SeeThere 到處看看 (Web PWA)",
+  "short_name": "SeeThere",
+  "description": "無廣告・高資安即時影像系統（支援 iPhone Safari 加入主畫面與 Android/Google TV APK 下載查詢）",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

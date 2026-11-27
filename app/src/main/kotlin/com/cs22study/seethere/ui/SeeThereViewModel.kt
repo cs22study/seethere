@@ -4,8 +4,11 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.location.LocationManager
+import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.cs22study.seethere.core.AppUpdateChecker
+import com.cs22study.seethere.core.AppUpdateInfo
 import com.cs22study.seethere.core.CameraCodec
 import com.cs22study.seethere.core.CameraItem
 import com.cs22study.seethere.core.CameraNavigator
@@ -48,7 +51,14 @@ enum class HomeTab {
     NEARBY,
     ADD_IMPORT,
     SETTINGS_LOGS,
+    ABOUT,
 }
+
+data class UpdateCheckUiState(
+    val isChecking: Boolean = false,
+    val statusText: String = "尚未檢查線上更新（目前可連線 GitHub Releases 驗證）",
+    val latestInfo: AppUpdateInfo? = null,
+)
 
 enum class PlayerViewMode {
     SINGLE,
@@ -121,6 +131,9 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
 
     private val _lastSettingsNotice = MutableStateFlow("本機日誌正常記錄中（支援檢視、匯出至 Documents 與清除）")
     val lastSettingsNotice: StateFlow<String> = _lastSettingsNotice.asStateFlow()
+
+    private val _updateState = MutableStateFlow(UpdateCheckUiState())
+    val updateState: StateFlow<UpdateCheckUiState> = _updateState.asStateFlow()
 
     val filteredLocalCameras: StateFlow<List<CameraItem>> = combine(
         activeCameras,
@@ -712,12 +725,67 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
         _bannerMessage.value = null
     }
 
+    fun getInstalledVersionInfo(): Pair<String, Long> {
+        val ctx = getApplication<Application>()
+        return runCatching {
+            val info = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+            val vName = info.versionName ?: "0.5.0"
+            val vCode = PackageInfoCompat.getLongVersionCode(info)
+            vName to vCode
+        }.getOrElse { "0.5.0" to 9L }
+    }
+
+    fun checkOnlineUpdate() {
+        val (currentVersion, _) = getInstalledVersionInfo()
+        _updateState.value = _updateState.value.copy(
+            isChecking = true,
+            statusText = "正在連線 GitHub 檢查最新版本...",
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val url = URL("https://api.github.com/repos/cs22study/seethere/releases?per_page=5")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 6_000
+                    readTimeout = 6_000
+                    setRequestProperty("Accept", "application/vnd.github+json")
+                    setRequestProperty("User-Agent", "SeeThere-Android/$currentVersion")
+                }
+                val code = conn.responseCode
+                if (code !in 200..299) error("HTTP $code")
+                val json = conn.inputStream.bufferedReader().use { it.readText() }
+                AppUpdateChecker.parseLatestReleaseFromArray(json, currentVersion)
+                    ?: error("尚未找到公開 Release 版本資訊")
+            }.onSuccess { info ->
+                val summary = if (info.hasUpdate) {
+                    "🎉 發現新版本 ${info.latestTag}（目前安裝：v$currentVersion）"
+                } else {
+                    "✅ 目前已是最新版本（安裝 v$currentVersion，線上最新 ${info.latestTag}）"
+                }
+                _updateState.value = UpdateCheckUiState(
+                    isChecking = false,
+                    statusText = summary,
+                    latestInfo = info,
+                )
+                logger.info("Update", "CHECK_OK", "current=$currentVersion latest=${info.latestTag} hasUpdate=${info.hasUpdate}")
+                showBanner(summary)
+            }.onFailure { ex ->
+                val errText = "⚠️ 無法取得線上版本（請確認網路連線）：${ex.localizedMessage ?: "未知錯誤"}"
+                _updateState.value = _updateState.value.copy(
+                    isChecking = false,
+                    statusText = errText,
+                )
+                logger.warn("Update", "CHECK_FAIL", ex.localizedMessage ?: "error")
+                showBanner(errText)
+            }
+        }
+    }
+
     private suspend fun fetchYouTubeOEmbed(videoId: String): Pair<String, String>? = withContext(Dispatchers.IO) {
         runCatching {
             val url = URL("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json")
             val conn = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 5_000
-                readTimeout = 5_000
+                connectTimeout = 4_000
+                readTimeout = 4_000
             }
             conn.inputStream.bufferedReader().use { reader ->
                 val obj = JSONObject(reader.readText())

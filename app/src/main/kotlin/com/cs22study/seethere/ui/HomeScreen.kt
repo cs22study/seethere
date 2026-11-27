@@ -3,6 +3,7 @@ package com.cs22study.seethere.ui
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -44,12 +45,15 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -104,6 +108,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.cs22study.seethere.core.AppUpdateChecker
 import com.cs22study.seethere.core.CameraItem
 import com.cs22study.seethere.core.CameraNavigator
 import com.cs22study.seethere.core.CorridorCameraResult
@@ -224,6 +229,10 @@ fun SeeThereHomeScreen(
                 HomeMenuItem("首頁畫面截圖", Icons.Default.CameraAlt, false) {
                     scope.launch { drawerState.close() }
                     onTriggerScreenshot(selectedCamera, playerViewMode)
+                }
+                HomeMenuItem("關於此 APP", Icons.Default.Info, currentTab == HomeTab.ABOUT) {
+                    currentTab = HomeTab.ABOUT
+                    scope.launch { drawerState.close() }
                 }
 
                 Spacer(Modifier.weight(1f))
@@ -384,6 +393,12 @@ fun SeeThereHomeScreen(
                                     },
                                     icon = { Icon(Icons.Default.Settings, contentDescription = "設定") },
                                     label = { Text("設定") },
+                                )
+                                NavigationRailItem(
+                                    selected = currentTab == HomeTab.ABOUT,
+                                    onClick = { currentTab = HomeTab.ABOUT },
+                                    icon = { Icon(Icons.Default.Info, contentDescription = "關於") },
+                                    label = { Text("關於") },
                                 )
                                 Spacer(Modifier.weight(1f))
                                 NavigationRailItem(
@@ -942,6 +957,9 @@ private fun TabContentBody(
             onRefreshLogs = { vm.refreshLogs(notifyUser = true) },
             onClearLogs = { vm.clearLocalLogs() },
             onExitApp = onExitApp,
+        )
+        HomeTab.ABOUT -> AboutAppTabContent(
+            vm = vm,
         )
     }
 }
@@ -1683,5 +1701,135 @@ private fun ScreenshotPreviewBanner(
                 Text("關閉", style = MaterialTheme.typography.labelSmall)
             }
         }
+    }
+}
+
+@Composable
+private fun AboutAppTabContent(vm: SeeThereViewModel) {
+    val context = LocalContext.current
+    val updateState by vm.updateState.collectAsState()
+    val (versionName, versionCode) = remember { vm.getInstalledVersionInfo() }
+
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF162033)),
+            border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("SeeThere 到處看看 APP", color = Color(0xFF38BDF8), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("目前版本：v$versionName (Build $versionCode)", color = Color(0xFFFACC15), fontWeight = FontWeight.SemiBold)
+                Text("支援平台：Android 7.0+ (minSdk 24) / 小米電視盒子 S 2・3 代 Google TV", color = Color(0xFFCBD5E1), style = MaterialTheme.typography.labelSmall)
+                Text("設計原則：零廣告、嚴格資安白名單（防 XSS/SSRF）、軟刪除可復原、零花費、本機日誌留存", color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(4.dp))
+                OutlinedButton(onClick = { openTrustedExternalUrl(context, "https://github.com/cs22study/seethere") }) {
+                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("開啟 GitHub 專案原始碼首頁")
+                }
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+            border = BorderStroke(1.dp, Color(0xFF334155)),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("線上檢查更新 (GitHub Releases)", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                Text(updateState.statusText, color = Color(0xFFCBD5E1), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = { vm.checkOnlineUpdate() },
+                        enabled = !updateState.isChecking,
+                    ) {
+                        if (updateState.isChecking) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFF0F172A))
+                            Spacer(Modifier.width(6.dp))
+                        } else {
+                            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(if (updateState.isChecking) "檢查中..." else "檢查線上更新")
+                    }
+                    updateState.latestInfo?.let { info ->
+                        OutlinedButton(onClick = { openTrustedExternalUrl(context, info.releasePageUrl) }) {
+                            Text("開啟發布頁")
+                        }
+                    }
+                }
+                updateState.latestInfo?.arm64ApkUrl?.let { apkUrl ->
+                    if (updateState.latestInfo?.hasUpdate == true) {
+                        OutlinedButton(
+                            onClick = { openTrustedExternalUrl(context, apkUrl) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("下載最新 arm64 APK (${updateState.latestInfo?.latestTag})")
+                        }
+                    }
+                }
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+            border = BorderStroke(1.dp, Color(0xFF334155)),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("iPhone / 跨平台免安裝網頁版 (PWA)", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                Text(
+                    "支援 iPhone 13 / 14 / 17 等 iOS 裝置透過 Safari 免安裝直開觀看精選鏡頭、搜尋附近影像、匯入匯出 CSV 與查看 APK 發布資訊（並可加入主畫面如 App 操作）。",
+                    color = Color(0xFFCBD5E1),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Text("網址：https://cs22study.github.io/seethere/", color = Color(0xFF4ADE80), style = MaterialTheme.typography.labelSmall)
+                OutlinedButton(onClick = { openTrustedExternalUrl(context, "https://cs22study.github.io/seethere/") }) {
+                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("在瀏覽器開啟 Web 網頁版")
+                }
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+            border = BorderStroke(1.dp, Color(0xFF334155)),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("開源授權：GNU GPL v3.0", color = Color(0xFFFACC15), fontWeight = FontWeight.Bold)
+                Text(
+                    "本軟體依據 GNU General Public License v3.0（GPL-3.0）條款以自由開源軟體釋出，完全無廣告且不蒐集使用者個資；使用者保有執行、研究、修改與依相同授權自由再散布之權利，本軟體依 GPL-3.0 條款不附帶任何明示或默示商業擔保 (NO WARRANTY)。",
+                    color = Color(0xFFCBD5E1),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                OutlinedButton(onClick = { openTrustedExternalUrl(context, "https://github.com/cs22study/seethere/blob/main/LICENSE") }) {
+                    Text("查看完整 GPL-3.0 授權條文")
+                }
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            border = BorderStroke(1.dp, Color(0xFF1E293B)),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("特別感謝｜參考成果與開源貢獻致謝", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                Text("衷心感謝下列開源專案、即時影像站台與公開資料提供者之無私分享與技術啟發：", color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall)
+                Text("• tw.live (台灣即時影像監視器整合平台)：即時路況目錄整理與附近距離定位檢索啟發。", color = Color(0xFFE2E8F0), style = MaterialTheme.typography.labelSmall)
+                Text("• mini-taiwan-pulse (github.com/ianlkl11234s/mini-taiwan-pulse)：台灣即時防災空間架構、水利署動態 API（wraDisasterCctv）、防 SSRF/XSS 白名單與離屏媒體釋放實務設計。", color = Color(0xFFE2E8F0), style = MaterialTheme.typography.labelSmall)
+                Text("• 新聞直播 fork620 (github.com/cs22study/androidtv-news-fork620)：Android TV YouTube 播放器相容參數（錯誤 153 修復）與同區網指定 Port 網頁管理模式經驗傳承。", color = Color(0xFFE2E8F0), style = MaterialTheme.typography.labelSmall)
+                Text("• 公開示範影像與開放資料單位：twipcam.com、桃園國際機場即時影像（遊桃園）、Tokyo Kabukicho Live Channel、台北市交通管制工程處、交通部 TDX、經濟部水利署開放資料（API v2）。", color = Color(0xFFE2E8F0), style = MaterialTheme.typography.labelSmall)
+                Text("• 核心開源工具鏈：Kotlin、Jetpack Compose、AndroidX Media3 (ExoPlayer)、Room、Free Software Foundation (GNU GPL v3.0)。", color = Color(0xFFE2E8F0), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+private fun openTrustedExternalUrl(context: Context, rawUrl: String) {
+    if (!AppUpdateChecker.isTrustedUpdateUrl(rawUrl)) return
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(rawUrl)))
     }
 }

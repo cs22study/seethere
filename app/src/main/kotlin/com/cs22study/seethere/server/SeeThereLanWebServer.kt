@@ -458,7 +458,7 @@ object SeeThereLanWebServer {
                   title:document.getElementById('camTitle').value||'',
                   region:document.getElementById('camRegion').value||'區網新增',
                   favorite:true
-                },10000);
+                },18000);
                 var d=resp.data||{};
                 var text=d.message||(d.ok?'已新增並播放':'新增失敗 (HTTP '+resp.status+')');
                 showBox('addMsg',text,d.ok?'ok':'err');

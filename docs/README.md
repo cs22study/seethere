@@ -30,6 +30,7 @@
 | [04_Spoke6_5_橫屏四宮格與雙來源關鍵字搜尋實作.md](./04_Spoke6_5_橫屏四宮格與雙來源關鍵字搜尋實作.md) | 橫屏分欄修復、四宮格 YouTube 縮放與點選全螢幕、附近關鍵字＋`tw.live`/`YouTube` 搜尋 (`v0.3.0`) | 已完成 |
 | [05_OPPO實機相容與v1v2簽章修復紀錄.md](./05_OPPO實機相容與v1v2簽章修復紀錄.md) | OPPO R11s Plus 實機排查、`v1+v2` 永久簽章、HLS 自動快照備援與窄屏 UI 修復 (`v0.3.1`) | 已完成 |
 | [06_Spoke6_8_區網後台四格翻頁與體驗修復.md](./06_Spoke6_8_區網後台四格翻頁與體驗修復.md) | 軟鍵盤強制收合、2×2 四格分組翻頁、Documents 匯出、同區網指定 PORT 網頁後台與前景保活、日誌診斷狀態卡 (`v0.4.0`–`v0.4.1`) | 已完成 |
+| [07_Spoke7_關於頁面與iPhone跨平台網頁版設計.md](./07_Spoke7_關於頁面與iPhone跨平台網頁版設計.md) | 左側選單「關於此 APP」（版本／線上更新／GPL-3.0／致謝）與 iPhone 免安裝網頁版（GitHub Pages PWA）系統設計 (`v0.5.0`) | 已完成 |
 | [TODO_LIST.md](./TODO_LIST.md) | Hub-and-Spoke 專案待辦清單與各 Spoke 驗收里程碑 | 持續更新 |
 
 ---
@@ -40,5 +41,6 @@
 | :--- | :--- | :--- | :--- |
 | **Phase 0** | 參考網站分析與系統設計規格 | 三方網站分析、架構設計、數學/資安原理、加值點子確認 | ✅ 已完成 |
 | **Spoke 1–5** | 核心引擎與 MVP 雙模 APP (`v0.1.0`) | `:core-stream` + 17 項單元測試、Room 軟刪除、HLS/YouTube/MJPEG/Snapshot 播放、預設最愛首頁、附近搜尋、首頁一鍵截圖（可選角落標註）、CSV 匯入/匯出、本機日誌與首頁退出 APP 鈕 | ✅ 已完成 |
-| **Spoke 6** | 進階看圖模式、動態資料源與體驗優化 (`v0.2.0`) | 2 秒截圖通知自動收合、`PixelCopy` 免彈窗快截、2×2 TV 四宮格、電子風景窗 30s 輪播、水利署動態 API (`wraDisasterCctv`)、起迄路線沿途影像搜尋、GitHub Push | ✅ 已完成 |
-| **Spoke 7** | 零花費雲端同步、永久簽章與 GitHub Pages | GAS + Sheets + Drive（`clasp` 雙向版控、雲端密碼驗證、手機傳電視 6 碼交換碼）、GitHub Pages 公開清單 JSON 與下載頁、永久簽章 Release APK | ⏳ 待啟動 |
+| **Spoke 6** | 進階看圖模式、動態資料源與體驗優化 (`v0.2.0`–`v0.4.1`) | 2 秒截圖通知自動收合、`PixelCopy` 免彈窗快截、2×2 四宮格（含 4 格分組翻頁）、電子風景窗 30s 輪播、水利署動態 API、路線搜尋、OPPO 軟鍵盤修復、Documents 匯出與同區網 Port 網頁管理後台 | ✅ 已完成 |
+| **Spoke 7A** | 關於與更新、GitHub Pages iPhone PWA (`v0.5.0`) | 左側選單「關於此 APP」（動態版本、GitHub 線上檢查更新、GPL-3.0 授權與完整參考致謝）、`web-pwa/` 跨平台免安裝網頁版（iPhone 13/14/17 Safari PWA + APK 發布查詢）與 Pages 自動部署工作流 | ✅ 已完成 |
+| **Spoke 7B** | 選用雲端個人收藏同步 | Google Apps Script + Sheets + Drive（`clasp` 雙向版控、雲端密碼驗證、手機傳電視 6 碼交換碼） | ⏳ 選配待啟動 |

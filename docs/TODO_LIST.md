@@ -33,13 +33,16 @@
     - [x] 同區網指定 PORT 輕量網頁管理後台＋`SeeThereLanService` 前景保活＋純 Kotlin JSON 編解碼＋按鈕即時狀態與錯誤回饋
     - [x] 設定與本機日誌分頁新增即時診斷狀態卡（操作通知、日誌筆數／路徑、區網網址與清除日誌鈕）
     - [x] 28 項自動化單元測試全數通過（`:core-stream:test` 26 項 + `:app:testDebugUnitTest` 2 項），已 `adb install -r` 推送 `v0.4.1` 至 OPPO R11s Plus（`7637c621`）
+  - [x] **左側「關於此 APP」與 iPhone 免安裝網頁版 PWA (`v0.5.0`)**（`docs/07_Spoke7_關於頁面與iPhone跨平台網頁版設計.md`）
+    - [x] 左側抽屜選單加入「關於此 APP」，顯示即時版本號、GitHub Releases 線上檢查更新、GNU GPL v3.0 授權聲明與參考專案／開源致謝清單
+    - [x] 新增 `web-pwa/` 跨平台免安裝網頁版（支援 iPhone 13/14/17 Safari 加入主畫面、HLS/YouTube 播放、GPS 附近查詢、CSV 互通與 APK 發布查詢）＋ `.github/workflows/pages.yml`
+    - [x] 31 項自動化單元測試全數通過（`:core-stream:test` 29 項 + `:app:testDebugUnitTest` 2 項），已 `adb install -r` 推送 `v0.5.0` 至 OPPO R11s Plus（`7637c621`）
 
 ---
 
-## 二、 後續排程 (Next Spokes)
+## 二、 後續選配排程 (Optional Extensions)
 
-- [ ] **Spoke 7：零花費雲端同步、手機傳電視交換碼與 GitHub Pages 發布**
+- [ ] **Spoke 7B：Google Apps Script 個人雲端同步（選配）**
   - [ ] Google Apps Script + Google Sheets + Google Drive 個人備份與「手機傳送至電視盒 6 碼暫存交換」（`clasp` 雙向版控、白名單鎖定 ID、雲端 SHA-256 + Salt 密碼驗證）
-  - [ ] GitHub Pages 靜態公開目錄 JSON（擴充全台/全球精選鏡頭）與 APK 下載引導頁
-  - [ ] 永久簽章 Keystore（`keystore/` 本機隔離 + GitHub Secrets）與 GitHub Release 正式打包發布
   - [ ] 單鏡定時本機縮時抓圖（含張數與空間上限控制）
+- [ ] **GitHub Pages 初次啟用設定**：於 GitHub Repo `Settings → Pages → Source` 選取 **GitHub Actions** 啟用 `https://cs22study.github.io/seethere/`

@@ -1,0 +1,114 @@
+{
+  "version": "0.5.0",
+  "anchors": [
+    { "id": "anchor_ntu", "name": "臺灣大學 (公館)", "latitude": 25.0173, "longitude": 121.5397 },
+    { "id": "anchor_tpe_airport", "name": "桃園國際機場", "latitude": 25.07706, "longitude": 121.21743 },
+    { "id": "anchor_tokyo_shinjuku", "name": "東京新宿 (歌舞伎町)", "latitude": 35.6938, "longitude": 139.7034 }
+  ],
+  "cameras": [
+    {
+      "id": "BOT079",
+      "title": "079-復興辛亥即時影像 (台大附近)",
+      "region": "台大附近",
+      "city": "台北市大安區",
+      "category": "道路路況",
+      "streamUrl": "https://jtmctrafficcctv5.gov.taipei/NVR/9e1db4ca-c5f8-4c6c-87ac-07abfe5ffb1a/live.m3u8",
+      "thumbnailUrl": "https://assets.tw.live/images/taipei/BOT079.jpg",
+      "latitude": 25.021568,
+      "longitude": 121.543298,
+      "sourceName": "台北市交通管制工程處",
+      "isFavorite": true
+    },
+    {
+      "id": "BOT169",
+      "title": "169-基隆路3段156巷 (台大附近)",
+      "region": "台大附近",
+      "city": "台北市大安區",
+      "category": "道路路況",
+      "streamUrl": "https://jtmctrafficcctv5.gov.taipei/NVR/21cfba71-3d03-4708-8b60-52b77f7c6578/live.m3u8",
+      "thumbnailUrl": "https://assets.tw.live/images/taipei/BOT169.jpg",
+      "latitude": 25.01591,
+      "longitude": 121.54248,
+      "sourceName": "台北市交通管制工程處",
+      "isFavorite": false
+    },
+    {
+      "id": "BOT322",
+      "title": "322-復興南路與和平東路口 (台大附近)",
+      "region": "台大附近",
+      "city": "台北市大安區",
+      "category": "道路路況",
+      "streamUrl": "https://jtmctrafficcctv4.gov.taipei/NVR/21f5df03-ca9f-4a46-bd36-3e763755bcd1/live.m3u8",
+      "thumbnailUrl": "https://assets.tw.live/images/taipei/BOT322.jpg",
+      "latitude": 25.0249389,
+      "longitude": 121.5429469,
+      "sourceName": "台北市交通管制工程處",
+      "isFavorite": false
+    },
+    {
+      "id": "BOT342",
+      "title": "342-辛亥路3段基隆路3段路口 (台大附近)",
+      "region": "台大附近",
+      "city": "台北市大安區",
+      "category": "道路路況",
+      "streamUrl": "https://jtmctrafficcctv3.gov.taipei/NVR/23129f05-569b-4fbd-9b28-be5b630b9bfa/live.m3u8",
+      "thumbnailUrl": "https://assets.tw.live/images/taipei/BOT342.jpg",
+      "latitude": 25.0187327,
+      "longitude": 121.5466159,
+      "sourceName": "台北市交通管制工程處",
+      "isFavorite": false
+    },
+    {
+      "id": "BOT026",
+      "title": "026-基隆快辛亥 (台大附近)",
+      "region": "台大附近",
+      "city": "台北市大安區",
+      "category": "道路路況",
+      "streamUrl": "https://jtmctrafficcctv3.gov.taipei/NVR/8414efa2-55dd-4d24-98aa-f25d51197d6b/live.m3u8",
+      "thumbnailUrl": "https://assets.tw.live/images/taipei/BOT026.jpg",
+      "latitude": 25.019,
+      "longitude": 121.5468,
+      "sourceName": "台北市交通管制工程處",
+      "isFavorite": false
+    },
+    {
+      "id": "taoyuanairport",
+      "title": "桃園國際機場即時影像",
+      "region": "桃園機場",
+      "city": "桃園市大園區",
+      "category": "機場觀光",
+      "streamUrl": "https://www.youtube-nocookie.com/embed/91PfFoqvuUk?autoplay=1&playsinline=1&rel=0&mute=1",
+      "thumbnailUrl": "https://i.ytimg.com/vi/91PfFoqvuUk/hqdefault.jpg",
+      "latitude": 25.07706,
+      "longitude": 121.21743,
+      "sourceName": "遊桃園 Taoyuan Travel",
+      "isFavorite": true
+    },
+    {
+      "id": "tokyo_kabukicho",
+      "title": "東京新宿 歌舞伎町 24H Live",
+      "region": "東京",
+      "city": "日本東京都新宿區",
+      "category": "國際街景",
+      "streamUrl": "https://www.youtube-nocookie.com/embed/DjdUEyjx8GM?autoplay=1&playsinline=1&rel=0&mute=1",
+      "thumbnailUrl": "https://i.ytimg.com/vi/DjdUEyjx8GM/hqdefault.jpg",
+      "latitude": 35.6938,
+      "longitude": 139.7034,
+      "sourceName": "Kabukicho Live Channel",
+      "isFavorite": true
+    },
+    {
+      "id": "kawaguchiko",
+      "title": "富士山急行線・河口湖駅前 Live",
+      "region": "山梨",
+      "city": "日本富士河口湖町",
+      "category": "國際街景",
+      "streamUrl": "https://www.youtube-nocookie.com/embed/ipbHUjTeUIw?autoplay=1&playsinline=1&rel=0&mute=1",
+      "thumbnailUrl": "https://i.ytimg.com/vi/ipbHUjTeUIw/hqdefault.jpg",
+      "latitude": 35.4982,
+      "longitude": 138.7687,
+      "sourceName": "UTYテレビ山梨",
+      "isFavorite": false
+    }
+  ]
+}

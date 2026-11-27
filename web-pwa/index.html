@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SeeThere">
+  <meta name="theme-color" content="#0f172a">
+  <title>SeeThere 到處看看 · 跨平台免安裝網頁版 (iPhone / Web PWA)</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <style>
+    :root{
+      --bg:#090d16;--card:#111827;--card2:#162033;--line:#1e293b;
+      --accent:#38bdf8;--gold:#facc15;--text:#f8fafc;--muted:#94a3b8;
+      --ok:#4ade80;--err:#fca5a5;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+    header{background:#0f172a;border-bottom:1px solid var(--line);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:20}
+    .brand b{color:var(--accent);font-size:17px}
+    .brand small{display:block;color:var(--muted);font-size:11px}
+    .wrap{max-width:960px;margin:0 auto;padding:10px 12px 72px;display:grid;gap:10px}
+    .modes,.tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{background:var(--card2);color:var(--text);border:1px solid #334155;border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+    .chip.active{background:var(--accent);color:#0f172a;border-color:var(--accent);font-weight:700}
+    .player-card,.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .viewport{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+    .viewport iframe,.viewport video,.viewport img{width:100%;height:100%;border:0;object-fit:contain;display:block}
+    .quad-bar{display:flex;align-items:center;justify-content:space-between;background:#0f172a;border-radius:8px;padding:4px 8px;margin-bottom:6px;gap:8px}
+    .quad-bar span{font-size:12px;color:#cbd5e1;text-align:center;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .quad-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .quad-cell{position:relative;aspect-ratio:16/9;background:#000;border-radius:6px;overflow:hidden;border:1px solid #1e293b}
+    .quad-label{position:absolute;top:0;left:0;right:0;background:rgba(15,23,42,.75);color:#fff;font-size:11px;padding:3px 6px;display:flex;justify-content:space-between;z-index:2;cursor:pointer}
+    .btn{background:var(--accent);color:#0f172a;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;font-size:13px}
+    .btn.gold{background:var(--gold)}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid #334155}
+    .row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+    .row:last-child{border-bottom:0}
+    input,textarea,select{width:100%;background:#0f172a;color:#fff;border:1px solid #334155;border-radius:8px;padding:8px;margin:4px 0 8px;font-size:14px}
+    .msg{padding:8px 10px;border-radius:8px;background:#1e293b;font-size:13px;margin-top:6px;display:none}
+    .msg.ok{display:block;color:var(--ok);border:1px solid #22c55e}
+    .msg.err{display:block;color:var(--err);border:1px solid #ef4444}
+    .tag{display:inline-block;padding:2px 7px;border-radius:6px;background:#1e293b;color:var(--gold);font-size:11px;margin-right:4px}
+    nav.bottom{position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:25}
+    nav.bottom button{background:none;border:0;color:var(--muted);font-size:12px;padding:6px 2px;cursor:pointer}
+    nav.bottom button.active{color:var(--accent);font-weight:700}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <b>SeeThere 到處看看 · Web PWA</b>
+      <small id="nowPlaying">無廣告・高資安・支援 iPhone 13/14/17 免安裝瀏覽</small>
+    </div>
+    <button class="btn gold" type="button" onclick="openTab('about')">APK / 關於</button>
+  </header>
+
+  <main class="wrap">
+    <div class="modes">
+      <button id="modeSingle" class="chip active" type="button" onclick="setViewMode('single')">單鏡模式</button>
+      <button id="modeQuad" class="chip" type="button" onclick="setViewMode('quad')">2×2 四宮格</button>
+      <button class="chip" type="button" onclick="toggleThumbFallback()">省流量縮圖備援：<span id="thumbModeText">關</span></button>
+    </div>
+
+    <section class="player-card" id="playerSection"></section>
+
+    <section id="tabFavorites" class="card"></section>
+    <section id="tabNearby" class="card" style="display:none"></section>
+    <section id="tabImport" class="card" style="display:none"></section>
+    <section id="tabAbout" class="card" style="display:none"></section>
+  </main>
+
+  <nav class="bottom">
+    <button id="navFavorites" class="active" type="button" onclick="openTab('favorites')">★ 我的最愛</button>
+    <button id="navNearby" type="button" onclick="openTab('nearby')">📍 附近查詢</button>
+    <button id="navImport" type="button" onclick="openTab('import')">＋ 新增匯入</button>
+    <button id="navAbout" type="button" onclick="openTab('about')">ℹ️ 關於 / APK</button>
+  </nav>
+
+  <script>
+    const STORAGE_CUSTOM = 'seethere_web_custom_cams_v1';
+    const STORAGE_FAVS = 'seethere_web_fav_ids_v1';
+    const REPO_API = 'https://api.github.com/repos/cs22study/seethere/releases?per_page=3';
+
+    let baseCatalog = [];
+    let anchors = [];
+    let cameras = [];
+    let selectedId = null;
+    let viewMode = 'single';
+    let quadPage = 0;
+    let currentTab = 'favorites';
+    let thumbMode = false;
+    let userLatLon = null;
+    let activeAnchorId = 'anchor_ntu';
+    let searchKeyword = '';
+
+    function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+    function sanitizeHttpsUrl(raw){
+      try{
+        const u=new URL(String(raw||'').trim());
+        if(u.protocol!=='https:') return null;
+        const h=u.hostname.toLowerCase();
+        if(h==='localhost'||h==='127.0.0.1'||h.startsWith('192.168.')||h.startsWith('10.')||/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return null;
+        if(['youtube.com','www.youtube.com','m.youtube.com','youtu.be','www.youtube-nocookie.com'].includes(h)){
+          let vid=null;
+          if(h==='youtu.be') vid=u.pathname.replace(/^\//,'').split('/')[0];
+          else vid=u.searchParams.get('v')||(u.pathname.match(/^\/(?:embed|live|shorts)\/([A-Za-z0-9_-]{11})/)||[])[1];
+          if(!vid||!/^[A-Za-z0-9_-]{11}$/.test(vid)) return null;
+          return {url:`https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&rel=0&mute=1`,thumb:`https://i.ytimg.com/vi/${vid}/hqdefault.jpg`};
+        }
+        return {url:u.toString(),thumb:''};
+      }catch(_e){return null;}
+    }
+
+    function haversineMeters(lat1,lon1,lat2,lon2){
+      const R=6371000, toRad=d=>d*Math.PI/180;
+      const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+      const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      return 2*R*Math.asin(Math.sqrt(a));
+    }
+
+    function loadFavSet(){
+      try{return new Set(JSON.parse(localStorage.getItem(STORAGE_FAVS)||'[]'));}catch(_e){return new Set();}
+    }
+    function saveFavSet(set){localStorage.setItem(STORAGE_FAVS,JSON.stringify([...set]));}
+
+    function rebuildCameras(){
+      const favOverride = localStorage.getItem(STORAGE_FAVS);
+      const favSet = favOverride ? loadFavSet() : null;
+      let custom = [];
+      try{custom = JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'[]');}catch(_e){}
+      const merged = [...baseCatalog, ...custom].map(c=>({
+        ...c,
+        isFavorite: favSet ? favSet.has(c.id) : !!c.isFavorite
+      }));
+      cameras = merged;
+      if(!selectedId && cameras.length) selectedId = (cameras.find(c=>c.isFavorite)||cameras[0]).id;
+    }
+
+    function toggleFav(id){
+      const currentFavs = new Set(cameras.filter(c=>c.isFavorite).map(c=>c.id));
+      if(currentFavs.has(id)) currentFavs.delete(id); else currentFavs.add(id);
+      saveFavSet(currentFavs);
+      rebuildCameras();
+      renderAll();
+    }
+
+    function renderMediaBox(cam, compact){
+      if(!cam) return '<div style="display:grid;place-items:center;height:100%;color:#64748b;font-size:12px">空置頻道</div>';
+      const u = cam.streamUrl||'';
+      if(thumbMode && cam.thumbnailUrl){
+        return `<img src="${esc(cam.thumbnailUrl)}" alt="${esc(cam.title)}">`;
+      }
+      if(u.includes('youtube-nocookie.com/embed/')||u.includes('youtube.com/embed/')){
+        return `<iframe src="${esc(u)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+      }
+      if(u.endsWith('.m3u8') || u.includes('.m3u8')){
+        return `<video src="${esc(u)}" poster="${esc(cam.thumbnailUrl||'')}" autoplay muted playsinline controls></video>`;
+      }
+      if(cam.thumbnailUrl){
+        return `<img src="${esc(cam.thumbnailUrl)}" alt="${esc(cam.title)}">`;
+      }
+      return `<div style="display:grid;place-items:center;height:100%;padding:8px;text-align:center;font-size:12px;color:#94a3b8">${esc(cam.title)}<br><a style="color:#38bdf8" target="_blank" rel="noopener" href="${esc(u)}">外部開啟串流</a></div>`;
+    }
+
+    function renderPlayer(){
+      const sec = document.getElementById('playerSection');
+      const cur = cameras.find(c=>c.id===selectedId) || cameras[0];
+      document.getElementById('nowPlaying').textContent = cur ? `正在播放：${cur.title}` : '無可用鏡頭';
+      if(viewMode==='quad'){
+        const ordered = [...cameras.filter(c=>c.isFavorite), ...cameras.filter(c=>!c.isFavorite)];
+        const total = Math.max(1, Math.ceil(ordered.length/4));
+        const safe = ((quadPage % total)+total)%total;
+        const pageCams = ordered.slice(safe*4, safe*4+4);
+        sec.innerHTML = `
+          <div class="quad-bar">
+            <button class="btn ghost" type="button" onclick="stepQuad(-1)">◀</button>
+            <span>四宮格 第 ${safe+1}/${total} 頁（點標題切換單鏡）</span>
+            <button class="btn ghost" type="button" onclick="stepQuad(1)">▶</button>
+          </div>
+          <div class="quad-grid">
+            ${[0,1,2,3].map(i=>{
+              const c=pageCams[i];
+              return `<div class="quad-cell">
+                ${c?`<div class="quad-label" onclick="selectAndSingle('${esc(c.id)}')"><span>${esc(c.title)}</span><span>↗</span></div>`:''}
+                ${renderMediaBox(c,true)}
+              </div>`;
+            }).join('')}
+          </div>`;
+      }else{
+        sec.innerHTML = `
+          <div class="viewport">${renderMediaBox(cur,false)}</div>
+          ${cur?`<div class="row" style="padding-bottom:0"><div><b>${esc(cur.title)}</b><br><small style="color:#94a3b8">${esc(cur.region)} · ${esc(cur.sourceName)}</small></div>
+          <button class="btn ghost" type="button" onclick="toggleFav('${esc(cur.id)}')">${cur.isFavorite?'★ 已收藏':'☆ 收藏'}</button></div>`:''}`;
+      }
+    }
+
+    function renderFavorites(){
+      const favs = cameras.filter(c=>c.isFavorite);
+      const list = favs.length ? favs : cameras;
+      document.getElementById('tabFavorites').innerHTML = `
+        <h3 style="margin:0 0 8px;color:#38bdf8">我的最愛與精選清單 (${favs.length} / 全部 ${cameras.length})</h3>
+        ${list.map(c=>`
+          <div class="row">
+            <div style="cursor:pointer;flex:1" onclick="selectCam('${esc(c.id)}')">
+              <b>${esc(c.title)}</b><br>
+              <small style="color:#94a3b8">${esc(c.region)} · ${esc(c.city)} · ${esc(c.sourceName)}</small>
+            </div>
+            <button class="btn ghost" type="button" onclick="toggleFav('${esc(c.id)}')">${c.isFavorite?'★':'☆'}</button>
+          </div>`).join('')}`;
+    }
+
+    function renderNearby(){
+      const anchor = anchors.find(a=>a.id===activeAnchorId) || anchors[0] || {latitude:25.0173,longitude:121.5397,name:'預設'};
+      const center = userLatLon || {latitude:anchor.latitude,longitude:anchor.longitude};
+      const kw = searchKeyword.trim().toLowerCase();
+      const sorted = cameras
+        .map(c=>({...c, dist:haversineMeters(center.latitude,center.longitude,c.latitude||25.0173,c.longitude||121.5397)}))
+        .filter(c=>!kw || c.title.toLowerCase().includes(kw) || (c.region||'').toLowerCase().includes(kw) || (c.city||'').toLowerCase().includes(kw))
+        .sort((a,b)=>a.dist-b.dist);
+
+      document.getElementById('tabNearby').innerHTML = `
+        <h3 style="margin:0 0 8px;color:#38bdf8">附近位置與關鍵字查詢</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn" type="button" onclick="requestGps()">📍 使用 iPhone 目前 GPS</button>
+          <select style="width:auto;flex:1;margin:0" onchange="activeAnchorId=this.value;userLatLon=null;renderNearby()">
+            ${anchors.map(a=>`<option value="${esc(a.id)}" ${a.id===activeAnchorId?'selected':''}>錨點：${esc(a.name)}</option>`).join('')}
+          </select>
+        </div>
+        <input placeholder="輸入關鍵字（例如：台大、機場、新宿、富士山）..." value="${esc(searchKeyword)}" oninput="searchKeyword=this.value;renderNearby()">
+        <small style="color:#94a3b8">目前參考座標：${userLatLon?'iPhone GPS':esc(anchor.name)}（共 ${sorted.length} 支符合）</small>
+        ${sorted.map(c=>`
+          <div class="row">
+            <div style="cursor:pointer;flex:1" onclick="selectCam('${esc(c.id)}')">
+              <b>${esc(c.title)}</b><br>
+              <small style="color:#94a3b8">距離 ${(c.dist>=1000?(c.dist/1000).toFixed(1)+' km':Math.round(c.dist)+' m')} · ${esc(c.city)}</small>
+            </div>
+            <button class="btn" type="button" onclick="selectCam('${esc(c.id)}')">觀看</button>
+          </div>`).join('')}`;
+    }
+
+    function renderImport(){
+      document.getElementById('tabImport').innerHTML = `
+        <h3 style="margin:0 0 8px;color:#38bdf8">瀏覽器端新增與 CSV 匯入/匯出 (存於本機)</h3>
+        <input id="wUrl" placeholder="HTTPS 串流網址 (.m3u8 或 YouTube 連結)">
+        <input id="wTitle" placeholder="鏡頭名稱">
+        <button class="btn" type="button" onclick="addWebCam()">資安檢查並新增</button>
+        <div id="wMsg" class="msg"></div>
+        <hr style="border-color:#1e293b;margin:12px 0">
+        <textarea id="wCsv" rows="4" placeholder="貼上 APK 匯出的 CSV 清單（title,streamUrl,region,city,latitude,longitude）..."></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" type="button" onclick="importWebCsv()">匯入 CSV</button>
+          <button class="btn gold" type="button" onclick="exportWebCsv()">匯出為 CSV</button>
+        </div>`;
+    }
+
+    function renderAbout(){
+      document.getElementById('tabAbout').innerHTML = `
+        <h3 style="margin:0 0 8px;color:#38bdf8">關於 SeeThere 到處看看 · APK 下載與 iPhone 網頁設計</h3>
+        <p style="font-size:13px;color:#cbd5e1;line-height:1.6">
+          <span class="tag">GPL-3.0</span> <span class="tag">零花費 GitHub Pages</span> <span class="tag">無廣告高資安</span><br>
+          <b>為什麼開發本網頁版？</b><br>
+          iPhone 13 / 14 / 17 因 iOS 未上架 App Store 無法直接安裝 Android <code>.apk</code>，本頁使用零花費 GitHub Pages PWA 技術，Safari 點選「分享 → 加入主畫面」即可免安裝操作，iOS 原生支援 HLS (<code>.m3u8</code>) 與 YouTube <code>playsinline</code> 直播。若需系統級全畫面截圖、OPPO/小米電視盒遙控器或同區網代理伺服器，請安裝 Android APK 版。
+        </p>
+        <div id="releaseBox" class="card" style="background:#0f172a;margin:8px 0">正在向 GitHub Releases 查詢最新 APK 版本...</div>
+        <div style="font-size:12px;color:#94a3b8;line-height:1.6">
+          <b style="color:#facc15">特別感謝｜參考成果與開源貢獻致謝：</b><br>
+          • <b>tw.live</b>：即時監視器目錄與距離搜尋啟發<br>
+          • <b>mini-taiwan-pulse</b> (github.com/ianlkl11234s/mini-taiwan-pulse)：水利署動態 API、防 XSS/SSRF 與離屏釋放架構<br>
+          • <b>新聞直播 fork620</b> (github.com/cs22study/androidtv-news-fork620)：TV YouTube 錯誤 153 修復與區網 Port 管理模式<br>
+          • 公開影像來源：twipcam.com、遊桃園桃園機場 Live、Tokyo Kabukicho Live、台北市交工處、交通部 TDX、水利署 API v2<br>
+          • 本軟體依 <b>GNU GPL v3.0</b> 授權自由開源釋出 · <a style="color:#38bdf8" target="_blank" rel="noopener" href="https://github.com/cs22study/seethere">GitHub 專案首頁</a>
+        </div>`;
+      fetchLatestRelease();
+    }
+
+    async function fetchLatestRelease(){
+      const box=document.getElementById('releaseBox');
+      if(!box) return;
+      try{
+        const r=await fetch(REPO_API);
+        const arr=await r.json();
+        const rel=Array.isArray(arr)&&arr[0];
+        if(!rel){box.textContent='尚未取得 Release 資料';return;}
+        const assets=(rel.assets||[]).filter(a=>/\.apk$/i.test(a.name));
+        box.innerHTML=`<b>最新釋出版本：${esc(rel.tag_name)}</b> (${esc((rel.published_at||'').slice(0,10))})<br>
+          <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">
+            <a href="${esc(rel.html_url)}" target="_blank" rel="noopener"><button class="btn" type="button">查看發布說明</button></a>
+            ${assets.map(a=>`<a href="${esc(a.browser_download_url)}" target="_blank" rel="noopener"><button class="btn gold" type="button">下載 ${esc(a.name)}</button></a>`).join('')}
+          </div>`;
+      }catch(e){
+        box.innerHTML=`無法讀取 GitHub API：<a style="color:#38bdf8" target="_blank" rel="noopener" href="https://github.com/cs22study/seethere/releases">點此直接開啟 Releases 下載頁</a>`;
+      }
+    }
+
+    function openTab(tab){
+      currentTab=tab;
+      ['favorites','nearby','import','about'].forEach(t=>{
+        document.getElementById('tab'+t[0].toUpperCase()+t.slice(1)).style.display=(t===tab?'block':'none');
+        document.getElementById('nav'+t[0].toUpperCase()+t.slice(1)).classList.toggle('active',t===tab);
+      });
+      if(tab==='about') renderAbout();
+    }
+    function setViewMode(m){
+      viewMode=m;
+      document.getElementById('modeSingle').classList.toggle('active',m==='single');
+      document.getElementById('modeQuad').classList.toggle('active',m==='quad');
+      renderPlayer();
+    }
+    function stepQuad(d){quadPage+=d;renderPlayer();}
+    function selectCam(id){selectedId=id;renderPlayer();renderFavorites();}
+    function selectAndSingle(id){selectedId=id;setViewMode('single');renderFavorites();}
+    function toggleThumbFallback(){thumbMode=!thumbMode;document.getElementById('thumbModeText').textContent=thumbMode?'開':'關';renderPlayer();}
+    function requestGps(){
+      if(!navigator.geolocation){alert('此瀏覽器不支援地理定位');return;}
+      navigator.geolocation.getCurrentPosition(
+        p=>{userLatLon={latitude:p.coords.latitude,longitude:p.coords.longitude};renderNearby();},
+        err=>alert('無法取得 GPS 權限：'+err.message)
+      );
+    }
+    function addWebCam(){
+      const s=sanitizeHttpsUrl(document.getElementById('wUrl').value);
+      const msg=document.getElementById('wMsg');
+      if(!s){msg.className='msg err';msg.textContent='資安檢查未通過：僅允許安全 HTTPS 或標準 YouTube 網址，禁止內網 IP。';return;}
+      const title=(document.getElementById('wTitle').value||'').trim()||'自訂 Web 鏡頭';
+      const custom=JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'[]');
+      const item={id:'web_'+Date.now(),title,region:'自訂新增',city:'iPhone/Web',streamUrl:s.url,thumbnailUrl:s.thumb,latitude:25.0173,longitude:121.5397,sourceName:'Web 新增',isFavorite:true};
+      custom.push(item);
+      localStorage.setItem(STORAGE_CUSTOM,JSON.stringify(custom));
+      selectedId=item.id;
+      rebuildCameras();
+      renderAll();
+      msg.className='msg ok';msg.textContent='已通過資安檢查並新增：'+title;
+    }
+    function exportWebCsv(){
+      const header='title,streamUrl,region,city,latitude,longitude\n';
+      const rows=cameras.map(c=>[c.title,c.streamUrl,c.region,c.city,c.latitude,c.longitude].map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+      document.getElementById('wCsv').value=header+rows;
+    }
+    function importWebCsv(){
+      const lines=(document.getElementById('wCsv').value||'').split(/\r?\n/).filter(Boolean);
+      let custom=[]; try{custom=JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||'[]');}catch(_e){}
+      let ok=0, bad=0;
+      lines.forEach((ln,idx)=>{
+        if(idx===0 && ln.toLowerCase().includes('streamurl')) return;
+        const cols=ln.split(',').map(s=>s.trim().replace(/^"|"$/g,''));
+        const title=cols[0], url=cols[1];
+        const s=sanitizeHttpsUrl(url);
+        if(title&&s){
+          custom.push({id:'csv_'+Date.now()+'_'+idx,title,region:cols[2]||'匯入',city:cols[3]||'Web',streamUrl:s.url,thumbnailUrl:s.thumb,latitude:parseFloat(cols[4])||25.0173,longitude:parseFloat(cols[5])||121.5397,sourceName:'CSV 匯入',isFavorite:true});
+          ok++;
+        }else bad++;
+      });
+      localStorage.setItem(STORAGE_CUSTOM,JSON.stringify(custom));
+      rebuildCameras();renderAll();
+      const msg=document.getElementById('wMsg');
+      msg.className='msg ok';msg.textContent=`匯入完成：成功 ${ok} 筆，資安攔截 ${bad} 筆`;
+    }
+
+    function renderAll(){renderPlayer();renderFavorites();renderNearby();renderImport();}
+    fetch('./cameras.json').then(r=>r.json()).then(d=>{
+      baseCatalog=d.cameras||[];anchors=d.anchors||[];rebuildCameras();renderAll();
+    });
+  </script>
+</body>
+</html>
