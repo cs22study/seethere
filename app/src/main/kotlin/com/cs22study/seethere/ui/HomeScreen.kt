@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -254,7 +255,7 @@ fun SeeThereHomeScreen(
                         title = {
                             Column {
                                 Text(
-                                    "SeeThere 到處看看",
+                                    if (useSideBySideLayout) "SeeThere 到處看看" else "SeeThere",
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -813,7 +814,10 @@ private fun FavoritesTabContent(
     val favorites = remember(activeCameras) { activeCameras.filter { it.isFavorite } }
     val displayed = if (showAll || favorites.isEmpty()) activeCameras else favorites
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 12.dp),
+    ) {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -886,7 +890,10 @@ private fun NearbyTabContent(
     val externalResults by vm.externalSearchResults.collectAsState()
     val isSearching by vm.isSearchingExternal.collectAsState()
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 12.dp),
+    ) {
         item {
             // Keyword search + external source toggles (tw.live + YouTube Live)
             Row(

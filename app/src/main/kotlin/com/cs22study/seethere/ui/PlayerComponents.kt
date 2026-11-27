@@ -172,6 +172,24 @@ private fun HlsExoPlayerView(
     var errorMessage by remember(camera.id) { mutableStateOf<String?>(null) }
     var retryAttempt by remember(camera.id) { mutableIntStateOf(0) }
     var reloadNonce by remember(camera.id) { mutableIntStateOf(0) }
+    var fallbackToSnapshot by remember(camera.id) { mutableStateOf(false) }
+
+    if (fallbackToSnapshot && camera.thumbnailUrl.isNotBlank()) {
+        SnapshotImageLoop(
+            imageUrl = camera.thumbnailUrl,
+            refreshMillis = 5_000L,
+            overlayLabel = "HLS 暫時維護中，已自動切換即時快照",
+            actionLabel = "重試影片",
+            onActionClick = {
+                fallbackToSnapshot = false
+                errorMessage = null
+                retryAttempt = 0
+                reloadNonce += 1
+            },
+            modifier = modifier,
+        )
+        return
+    }
 
     val exoPlayer = remember(camera.id, reloadNonce) {
         ExoPlayer.Builder(context).build().apply {
@@ -205,11 +223,16 @@ private fun HlsExoPlayerView(
 
     LaunchedEffect(errorMessage, retryAttempt) {
         if (errorMessage != null) {
-            val waitMs = StreamRouter.computeReconnectDelayMs(retryAttempt, Random.nextLong(0, 400))
-            if (waitMs != null) {
-                delay(waitMs)
-                retryAttempt += 1
-                reloadNonce += 1
+            if (retryAttempt >= 1 && camera.thumbnailUrl.isNotBlank()) {
+                delay(1_200L)
+                fallbackToSnapshot = true
+            } else {
+                val waitMs = StreamRouter.computeReconnectDelayMs(retryAttempt, Random.nextLong(0, 400))
+                if (waitMs != null) {
+                    delay(waitMs)
+                    retryAttempt += 1
+                    reloadNonce += 1
+                }
             }
         }
     }
@@ -226,7 +249,10 @@ private fun HlsExoPlayerView(
                     player = exoPlayer
                 }
             },
-            update = { view -> view.player = exoPlayer },
+            update = { view ->
+                view.player = exoPlayer
+                view.useController = (errorMessage == null)
+            },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -234,23 +260,28 @@ private fun HlsExoPlayerView(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xCC0F172A))
-                    .padding(16.dp),
+                    .background(Color(0xD90F172A))
+                    .padding(12.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(errorMessage ?: "", color = Color(0xFFFCA5A5))
+                Text(errorMessage ?: "", color = Color(0xFFFCA5A5), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         retryAttempt = 0
                         errorMessage = null
                         reloadNonce += 1
                     }) {
-                        Text("立即重試")
+                        Text("重試")
+                    }
+                    if (camera.thumbnailUrl.isNotBlank()) {
+                        OutlinedButton(onClick = { fallbackToSnapshot = true }) {
+                            Text("即時快照")
+                        }
                     }
                     OutlinedButton(onClick = { onSwitchToBackup(camera) }) {
-                        Text("切換最近備援")
+                        Text("換備援")
                     }
                 }
             }

@@ -22,6 +22,9 @@
     - [x] 修復 2×2 四宮格 YouTube 畫面裁剪為上半部問題，新增點選任一格放大全螢幕與退出全螢幕
     - [x] 附近查詢加入關鍵字＋`tw.live` / `YouTube` 來源搜尋與一鍵播放/收藏
     - [x] 24 項自動化單元測試全數通過（`:core-stream:test` 23 項 + `:app:testDebugUnitTest` 1 項）並產出 `v0.3.0` Debug APK
+  - [x] **OPPO R11s Plus（Android 7.1.1 / ColorOS 3.2）實機相容與 `v1+v2` 永久簽章 (`v0.3.1`)**（`docs/05_OPPO實機相容與v1v2簽章修復紀錄.md`）
+    - [x] 本機建立持久化簽章金鑰並強制開啟 `v1 + v2` 雙重簽章（Release APK 約 2.3 MB）
+    - [x] 新增 HLS 失敗自動切換即時快照備援與窄螢幕標題適配，已於 `CPH1721` 實機 `adb` 部署驗證通過
 
 ---
 

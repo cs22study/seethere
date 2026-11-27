@@ -30,8 +30,8 @@ android {
         applicationId = "com.cs22study.seethere"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -65,7 +65,14 @@ android {
                 }
                 enableV1Signing = true
                 enableV2Signing = true
+                enableV3Signing = false
             }
+        }
+        create("releaseFallbackDebug") {
+            initWith(getByName("debug"))
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = false
         }
     }
 
@@ -79,7 +86,7 @@ android {
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("releasePersistent")
             } else {
-                signingConfigs.getByName("debug")
+                signingConfigs.getByName("releaseFallbackDebug")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
