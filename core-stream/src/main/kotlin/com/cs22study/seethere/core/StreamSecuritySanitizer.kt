@@ -183,11 +183,12 @@ object StreamSecuritySanitizer {
             <html>
             <head>
               <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+              <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
               <meta name="referrer" content="strict-origin-when-cross-origin">
               <style>
+                * { box-sizing: border-box; }
                 html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
-                iframe { border:0; width:100%; height:100%; display:block; }
+                iframe { position:fixed; top:0; left:0; width:100%; height:100%; border:0; display:block; }
               </style>
             </head>
             <body>

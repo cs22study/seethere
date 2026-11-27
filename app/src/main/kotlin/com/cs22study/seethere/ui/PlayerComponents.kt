@@ -283,8 +283,9 @@ private fun IsolatedYouTubeWebView(
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.mediaPlaybackRequiresUserGesture = false
-                    settings.useWideViewPort = true
-                    settings.loadWithOverviewMode = true
+                    // Keep 1:1 viewport in iframe mode so 2x2 Quad tiles don't crop to the top half
+                    settings.useWideViewPort = false
+                    settings.loadWithOverviewMode = false
                     settings.textZoom = 100
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     settings.allowFileAccess = false
@@ -337,11 +338,15 @@ private fun IsolatedYouTubeWebView(
                 if (webView.tag != loadKey) {
                     webView.tag = loadKey
                     if (useDirectWatchMode && videoId.isNotBlank()) {
+                        webView.settings.useWideViewPort = true
+                        webView.settings.loadWithOverviewMode = true
                         webView.loadUrl(
                             "https://www.youtube.com/watch?v=$videoId",
                             mapOf("Referer" to "https://www.youtube.com/"),
                         )
                     } else if (videoId.isNotBlank()) {
+                        webView.settings.useWideViewPort = false
+                        webView.settings.loadWithOverviewMode = false
                         val html = StreamSecuritySanitizer.buildSafeYouTubeIframeHtml(
                             videoId = videoId,
                             originUrl = "https://com.cs22study.seethere",

@@ -1,6 +1,8 @@
 package com.cs22study.seethere.ui
 
 import android.content.Intent
+import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,12 +39,14 @@ import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -76,17 +81,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.cs22study.seethere.core.CameraItem
 import com.cs22study.seethere.core.CorridorCameraResult
 import com.cs22study.seethere.core.GeoSpatialEngine
 import com.cs22study.seethere.core.LocationAnchor
 import com.cs22study.seethere.core.NearbyCameraResult
+import com.cs22study.seethere.data.ExternalSearchCandidate
 import com.cs22study.seethere.data.UserSettings
 import com.cs22study.seethere.service.CapturedScreenshot
 import com.cs22study.seethere.service.ScreenCaptureBus
@@ -124,6 +133,14 @@ fun SeeThereHomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val useSideBySideLayout = isTvMode ||
+        configuration.screenWidthDp >= 680 ||
+        configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    BackHandler(enabled = isFullscreen) {
+        isFullscreen = false
+    }
 
     // Auto-dismiss screenshot toast after 2 seconds so it does not cover the viewport
     LaunchedEffect(latestScreenshot) {
@@ -313,53 +330,55 @@ fun SeeThereHomeScreen(
                         onSwitchBackup = { vm.selectBackupFor(it) },
                         onLogEvent = { evt, msg -> vm.logger.warn("Player", evt, msg) },
                     )
-                } else if (isTvMode) {
+                } else if (useSideBySideLayout) {
                     Row(modifier = Modifier.fillMaxSize()) {
-                        NavigationRail(
-                            containerColor = Color(0xFF0F172A),
-                            modifier = Modifier.fillMaxHeight(),
-                        ) {
-                            NavigationRailItem(
-                                selected = currentTab == HomeTab.FAVORITES,
-                                onClick = { currentTab = HomeTab.FAVORITES },
-                                icon = { Icon(Icons.Default.Star, contentDescription = "最愛") },
-                                label = { Text("最愛") },
-                            )
-                            NavigationRailItem(
-                                selected = currentTab == HomeTab.NEARBY,
-                                onClick = { currentTab = HomeTab.NEARBY },
-                                icon = { Icon(Icons.Default.LocationOn, contentDescription = "附近") },
-                                label = { Text("附近") },
-                            )
-                            NavigationRailItem(
-                                selected = currentTab == HomeTab.ADD_IMPORT,
-                                onClick = { currentTab = HomeTab.ADD_IMPORT },
-                                icon = { Icon(Icons.Default.AddCircleOutline, contentDescription = "匯入") },
-                                label = { Text("匯入") },
-                            )
-                            NavigationRailItem(
-                                selected = currentTab == HomeTab.SETTINGS_LOGS,
-                                onClick = {
-                                    vm.refreshLogs()
-                                    currentTab = HomeTab.SETTINGS_LOGS
-                                },
-                                icon = { Icon(Icons.Default.Settings, contentDescription = "設定") },
-                                label = { Text("設定") },
-                            )
-                            Spacer(Modifier.weight(1f))
-                            NavigationRailItem(
-                                selected = false,
-                                onClick = {
-                                    vm.logger.info("App", "EXIT", "TV Rail Exit App clicked")
-                                    onExitApp()
-                                },
-                                icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "退出", tint = Color(0xFFF87171)) },
-                                label = { Text("退出", color = Color(0xFFF87171)) },
-                            )
+                        if (isTvMode) {
+                            NavigationRail(
+                                containerColor = Color(0xFF0F172A),
+                                modifier = Modifier.fillMaxHeight(),
+                            ) {
+                                NavigationRailItem(
+                                    selected = currentTab == HomeTab.FAVORITES,
+                                    onClick = { currentTab = HomeTab.FAVORITES },
+                                    icon = { Icon(Icons.Default.Star, contentDescription = "最愛") },
+                                    label = { Text("最愛") },
+                                )
+                                NavigationRailItem(
+                                    selected = currentTab == HomeTab.NEARBY,
+                                    onClick = { currentTab = HomeTab.NEARBY },
+                                    icon = { Icon(Icons.Default.LocationOn, contentDescription = "附近") },
+                                    label = { Text("附近") },
+                                )
+                                NavigationRailItem(
+                                    selected = currentTab == HomeTab.ADD_IMPORT,
+                                    onClick = { currentTab = HomeTab.ADD_IMPORT },
+                                    icon = { Icon(Icons.Default.AddCircleOutline, contentDescription = "匯入") },
+                                    label = { Text("匯入") },
+                                )
+                                NavigationRailItem(
+                                    selected = currentTab == HomeTab.SETTINGS_LOGS,
+                                    onClick = {
+                                        vm.refreshLogs()
+                                        currentTab = HomeTab.SETTINGS_LOGS
+                                    },
+                                    icon = { Icon(Icons.Default.Settings, contentDescription = "設定") },
+                                    label = { Text("設定") },
+                                )
+                                Spacer(Modifier.weight(1f))
+                                NavigationRailItem(
+                                    selected = false,
+                                    onClick = {
+                                        vm.logger.info("App", "EXIT", "TV Rail Exit App clicked")
+                                        onExitApp()
+                                    },
+                                    icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "退出", tint = Color(0xFFF87171)) },
+                                    label = { Text("退出", color = Color(0xFFF87171)) },
+                                )
+                            }
                         }
 
-                        Row(modifier = Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(modifier = Modifier.weight(1.05f).fillMaxHeight()) {
+                        Row(modifier = Modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                                 TabContentBody(
                                     tab = currentTab,
                                     activeCameras = activeCameras,
@@ -389,9 +408,9 @@ fun SeeThereHomeScreen(
                                     selectedCamera = selectedCamera,
                                     activeCameras = activeCameras,
                                     trafficSaverMode = settings.trafficSaverMode,
-                                    onSelectCamera = {
+                                    onSelectAndFullscreen = {
                                         vm.selectCamera(it)
-                                        playerViewMode = PlayerViewMode.SINGLE
+                                        isFullscreen = true
                                     },
                                     onToggleFullscreen = { isFullscreen = true },
                                     onSwitchBackup = { vm.selectBackupFor(it) },
@@ -407,19 +426,21 @@ fun SeeThereHomeScreen(
                             onSelectMode = { playerViewMode = it },
                         )
                         Spacer(Modifier.height(4.dp))
-                        PlayerViewportSection(
-                            viewMode = playerViewMode,
-                            selectedCamera = selectedCamera,
-                            activeCameras = activeCameras,
-                            trafficSaverMode = settings.trafficSaverMode,
-                            onSelectCamera = {
-                                vm.selectCamera(it)
-                                playerViewMode = PlayerViewMode.SINGLE
-                            },
-                            onToggleFullscreen = { isFullscreen = true },
-                            onSwitchBackup = { vm.selectBackupFor(it) },
-                            onLogEvent = { evt, msg -> vm.logger.warn("Player", evt, msg) },
-                        )
+                        Box(modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp)) {
+                            PlayerViewportSection(
+                                viewMode = playerViewMode,
+                                selectedCamera = selectedCamera,
+                                activeCameras = activeCameras,
+                                trafficSaverMode = settings.trafficSaverMode,
+                                onSelectAndFullscreen = {
+                                    vm.selectCamera(it)
+                                    isFullscreen = true
+                                },
+                                onToggleFullscreen = { isFullscreen = true },
+                                onSwitchBackup = { vm.selectBackupFor(it) },
+                                onLogEvent = { evt, msg -> vm.logger.warn("Player", evt, msg) },
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                             TabContentBody(
@@ -507,7 +528,7 @@ private fun PlayerViewportSection(
     selectedCamera: CameraItem?,
     activeCameras: List<CameraItem>,
     trafficSaverMode: Boolean,
-    onSelectCamera: (CameraItem) -> Unit,
+    onSelectAndFullscreen: (CameraItem) -> Unit,
     onToggleFullscreen: () -> Unit,
     onSwitchBackup: (CameraItem) -> Unit,
     onLogEvent: (String, String) -> Unit,
@@ -520,7 +541,7 @@ private fun PlayerViewportSection(
         QuadWallGrid(
             cameras = quadList,
             trafficSaverMode = trafficSaverMode,
-            onTapCamera = onSelectCamera,
+            onFullscreenCamera = onSelectAndFullscreen,
             onSwitchBackup = onSwitchBackup,
             onLogEvent = onLogEvent,
         )
@@ -539,7 +560,7 @@ private fun PlayerViewportSection(
 private fun QuadWallGrid(
     cameras: List<CameraItem>,
     trafficSaverMode: Boolean,
-    onTapCamera: (CameraItem) -> Unit,
+    onFullscreenCamera: (CameraItem) -> Unit,
     onSwitchBackup: (CameraItem) -> Unit,
     onLogEvent: (String, String) -> Unit,
 ) {
@@ -559,8 +580,8 @@ private fun QuadWallGrid(
                             modifier = Modifier
                                 .weight(1f)
                                 .aspectRatio(16f / 9f)
-                                .background(Color.Black)
-                                .clickable(enabled = cam != null) { if (cam != null) onTapCamera(cam) },
+                                .clipToBounds()
+                                .background(Color.Black),
                         ) {
                             StreamPlayerBox(
                                 camera = cam,
@@ -570,17 +591,33 @@ private fun QuadWallGrid(
                                 modifier = Modifier.fillMaxSize(),
                             )
                             if (cam != null) {
-                                Text(
-                                    text = cam.title,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                // Clickable header + expand button above AndroidView so touch/D-Pad triggers fullscreen reliably
+                                Row(
                                     modifier = Modifier
                                         .align(Alignment.TopStart)
-                                        .background(Color(0x990F172A))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
+                                        .fillMaxWidth()
+                                        .zIndex(2f)
+                                        .background(Color(0xAA0F172A))
+                                        .clickable { onFullscreenCamera(cam) }
+                                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        text = cam.title,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.Fullscreen,
+                                        contentDescription = "全螢幕",
+                                        tint = Color(0xFFFACC15),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -682,6 +719,8 @@ private fun FullscreenPlayerOverlay(
             }
             Button(onClick = onExitFullscreen) {
                 Icon(Icons.Default.FullscreenExit, contentDescription = "退出全螢幕")
+                Spacer(Modifier.width(4.dp))
+                Text("退出全螢幕")
             }
         }
     }
@@ -723,6 +762,7 @@ private fun TabContentBody(
             settings = settings,
             selectedCameraId = selectedCamera?.id,
             hasLocationPermission = hasLocationPermission,
+            vm = vm,
             onUseGps = {
                 if (hasLocationPermission) {
                     vm.refreshGpsLocation(true)
@@ -828,6 +868,7 @@ private fun NearbyTabContent(
     settings: UserSettings,
     selectedCameraId: String?,
     hasLocationPermission: Boolean,
+    vm: SeeThereViewModel,
     onUseGps: () -> Unit,
     onSelectAnchor: (String) -> Unit,
     onSelectRadius: (Int) -> Unit,
@@ -837,9 +878,68 @@ private fun NearbyTabContent(
     onToggleFavorite: (CameraItem) -> Unit,
 ) {
     var corridorMode by remember { mutableStateOf(false) }
+    val searchKeyword by vm.searchKeyword.collectAsState()
+    val includeLocal by vm.includeLocalSource.collectAsState()
+    val includeTwLive by vm.includeTwLiveSource.collectAsState()
+    val includeYouTube by vm.includeYouTubeSource.collectAsState()
+    val filteredLocal by vm.filteredLocalCameras.collectAsState()
+    val externalResults by vm.externalSearchResults.collectAsState()
+    val isSearching by vm.isSearchingExternal.collectAsState()
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
+            // Keyword search + external source toggles (tw.live + YouTube Live)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                OutlinedTextField(
+                    value = searchKeyword,
+                    onValueChange = { vm.updateSearchKeyword(it) },
+                    label = { Text("關鍵字/地點 (例: 台大、淡水、東京)") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = { vm.runNearbyAndKeywordSearch() },
+                    enabled = !isSearching,
+                ) {
+                    if (isSearching) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Search, contentDescription = "搜尋", modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text("搜尋")
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                item {
+                    FilterChip(
+                        selected = includeLocal,
+                        onClick = { vm.toggleSearchSource(local = !includeLocal) },
+                        label = { Text("本機清單") },
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = includeTwLive,
+                        onClick = { vm.toggleSearchSource(twLive = !includeTwLive) },
+                        label = { Text("tw.live 來源") },
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = includeYouTube,
+                        onClick = { vm.toggleSearchSource(youtube = !includeYouTube) },
+                        label = { Text("YouTube 來源") },
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = !corridorMode,
@@ -910,11 +1010,40 @@ private fun NearbyTabContent(
             }
         }
 
-        if (!corridorMode) {
-            if (nearbyCameras.isEmpty()) {
+        if (filteredLocal.isNotEmpty()) {
+            item {
+                Text("本機關鍵字符合 (${filteredLocal.size})", color = Color(0xFF38BDF8), style = MaterialTheme.typography.labelMedium)
+            }
+            items(filteredLocal, key = { "kw_${it.id}" }) { cam ->
+                CameraListCard(
+                    camera = cam,
+                    subtitle = "${cam.region} · ${cam.city} · ${cam.sourceName}",
+                    isSelected = cam.id == selectedCameraId,
+                    onClick = { onSelectCamera(cam) },
+                    onToggleFavorite = { onToggleFavorite(cam) },
+                    onSoftDelete = null,
+                )
+            }
+        }
+
+        if (externalResults.isNotEmpty()) {
+            item {
+                Text("線上即時搜尋結果：tw.live / YouTube (${externalResults.size})", color = Color(0xFFFACC15), style = MaterialTheme.typography.labelMedium)
+            }
+            items(externalResults, key = { it.id }) { cand ->
+                ExternalCandidateCard(
+                    candidate = cand,
+                    onPlay = { vm.playOrSaveExternalCandidate(cand, saveAsFavorite = false) },
+                    onSaveFavorite = { vm.playOrSaveExternalCandidate(cand, saveAsFavorite = true) },
+                )
+            }
+        }
+
+        if (!corridorMode && includeLocal) {
+            if (nearbyCameras.isEmpty() && externalResults.isEmpty()) {
                 item {
                     Text(
-                        "目前半徑內無符合鏡頭，請嘗試放大半徑或切換錨點（如臺灣大學 / 桃園機場 / 東京新宿）",
+                        "目前半徑內無本機鏡頭，可點擊上方「搜尋」查詢 tw.live / YouTube，或放大半徑/切換錨點",
                         color = Color(0xFFFCA5A5),
                         modifier = Modifier.padding(12.dp),
                     )
@@ -931,7 +1060,7 @@ private fun NearbyTabContent(
                     onSoftDelete = null,
                 )
             }
-        } else {
+        } else if (corridorMode) {
             if (corridorCameras.isEmpty()) {
                 item {
                     Text(
@@ -952,6 +1081,42 @@ private fun NearbyTabContent(
                     onToggleFavorite = { onToggleFavorite(result.camera) },
                     onSoftDelete = null,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExternalCandidateCard(
+    candidate: ExternalSearchCandidate,
+    onPlay: () -> Unit,
+    onSaveFavorite: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF162033)),
+        border = BorderStroke(1.dp, Color(0xFF334155)),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onPlay),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "[${candidate.sourceBadge}] ${candidate.title}",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(candidate.subtitle, color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(onClick = onPlay) {
+                Text("播放", style = MaterialTheme.typography.labelSmall)
+            }
+            IconButton(onClick = onSaveFavorite) {
+                Icon(Icons.Default.FavoriteBorder, contentDescription = "收藏", tint = Color(0xFFFACC15))
             }
         }
     }
@@ -979,8 +1144,8 @@ private fun AddImportTabContent(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("單筆新增即時影像（支援 .m3u8 / MJPEG / YouTube 連結）", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
-        OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("串流或 YouTube 網址 (HTTPS)") }, modifier = Modifier.fillMaxWidth())
+        Text("單筆新增即時影像（支援 .m3u8 / MJPEG / YouTube / tw.live/cam/?id=）", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("串流、YouTube 或 tw.live 網址 (HTTPS)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("鏡頭名稱（YouTube 可留空自動抓取）") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = region, onValueChange = { region = it }, label = { Text("區域") }, modifier = Modifier.weight(1f))

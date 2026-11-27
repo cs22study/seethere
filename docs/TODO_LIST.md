@@ -17,7 +17,11 @@
   - [x] 水利署防災影像（`opendata.wra.gov.tw` API v2）動態加密序號即時解析與 10 分鐘快取（示範：`wra_17457`）
   - [x] **起迄路線沿途影像搜尋**（`Corridor Search`）
   - [x] **YouTube 錯誤 153 修復 (`v0.2.1`)**：`loadDataWithBaseURL` + `strict-origin-when-cross-origin` + `fork620` 直連 `<video>` 置頂切換備援
-  - [x] 21 項自動化單元測試全數通過（`:core-stream:test` 20 項 + `:app:testDebugUnitTest` 1 項）並產出 `v0.2.1` Debug APK
+  - [x] **橫屏分欄、四宮格全螢幕與雙來源關鍵字搜尋 (`v0.3.0`)**（`docs/04_Spoke6_5_橫屏四宮格與雙來源關鍵字搜尋實作.md`）
+    - [x] 修正橫屏模擬器左右分欄（左頁籤內容不再被擠壓為 0dp）
+    - [x] 修復 2×2 四宮格 YouTube 畫面裁剪為上半部問題，新增點選任一格放大全螢幕與退出全螢幕
+    - [x] 附近查詢加入關鍵字＋`tw.live` / `YouTube` 來源搜尋與一鍵播放/收藏
+    - [x] 24 項自動化單元測試全數通過（`:core-stream:test` 23 項 + `:app:testDebugUnitTest` 1 項）並產出 `v0.3.0` Debug APK
 
 ---
 

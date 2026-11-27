@@ -9,10 +9,13 @@ import androidx.lifecycle.viewModelScope
 import com.cs22study.seethere.core.CameraCodec
 import com.cs22study.seethere.core.CameraItem
 import com.cs22study.seethere.core.CorridorCameraResult
+import com.cs22study.seethere.core.ExternalSearchParsers
 import com.cs22study.seethere.core.GeoSpatialEngine
 import com.cs22study.seethere.core.LocationAnchor
 import com.cs22study.seethere.core.NearbyCameraResult
 import com.cs22study.seethere.core.StreamSecuritySanitizer
+import com.cs22study.seethere.data.ExternalCamSearchClient
+import com.cs22study.seethere.data.ExternalSearchCandidate
 import com.cs22study.seethere.data.LocalRotatingLogger
 import com.cs22study.seethere.data.PreferencesRepository
 import com.cs22study.seethere.data.db.AppDatabase
@@ -84,6 +87,39 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
 
     private val _corridorEndAnchorId = MutableStateFlow("anchor_tpe_airport")
     val corridorEndAnchorId: StateFlow<String> = _corridorEndAnchorId.asStateFlow()
+
+    private val _searchKeyword = MutableStateFlow("")
+    val searchKeyword: StateFlow<String> = _searchKeyword.asStateFlow()
+
+    private val _includeLocalSource = MutableStateFlow(true)
+    val includeLocalSource: StateFlow<Boolean> = _includeLocalSource.asStateFlow()
+
+    private val _includeTwLiveSource = MutableStateFlow(true)
+    val includeTwLiveSource: StateFlow<Boolean> = _includeTwLiveSource.asStateFlow()
+
+    private val _includeYouTubeSource = MutableStateFlow(true)
+    val includeYouTubeSource: StateFlow<Boolean> = _includeYouTubeSource.asStateFlow()
+
+    private val _externalSearchResults = MutableStateFlow<List<ExternalSearchCandidate>>(emptyList())
+    val externalSearchResults: StateFlow<List<ExternalSearchCandidate>> = _externalSearchResults.asStateFlow()
+
+    private val _isSearchingExternal = MutableStateFlow(false)
+    val isSearchingExternal: StateFlow<Boolean> = _isSearchingExternal.asStateFlow()
+
+    val filteredLocalCameras: StateFlow<List<CameraItem>> = combine(
+        activeCameras,
+        _searchKeyword,
+        _includeLocalSource,
+    ) { cams, kw, includeLocal ->
+        if (!includeLocal) return@combine emptyList()
+        val trimmed = kw.trim()
+        if (trimmed.isBlank()) emptyList() else cams.filter {
+            it.title.contains(trimmed, ignoreCase = true) ||
+                it.region.contains(trimmed, ignoreCase = true) ||
+                it.city.contains(trimmed, ignoreCase = true) ||
+                it.category.contains(trimmed, ignoreCase = true)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val corridorCameras: StateFlow<List<CorridorCameraResult>> = combine(
         activeCameras,
@@ -157,6 +193,122 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
 
     fun setCorridorEndAnchor(anchorId: String) {
         _corridorEndAnchorId.value = anchorId
+    }
+
+    fun updateSearchKeyword(keyword: String) {
+        _searchKeyword.value = keyword
+    }
+
+    fun toggleSearchSource(local: Boolean? = null, twLive: Boolean? = null, youtube: Boolean? = null) {
+        local?.let { _includeLocalSource.value = it }
+        twLive?.let { _includeTwLiveSource.value = it }
+        youtube?.let { _includeYouTubeSource.value = it }
+    }
+
+    fun runNearbyAndKeywordSearch() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isSearchingExternal.value = true
+            try {
+                val kw = _searchKeyword.value.trim()
+                val settings = prefsRepo.settings.value
+                val selectedAnchor = anchors.value.firstOrNull { it.id == settings.selectedAnchorId }
+                    ?: anchors.value.firstOrNull()
+                var (lat, lon) = _gpsLocation.value ?: if (selectedAnchor != null) {
+                    selectedAnchor.latitude to selectedAnchor.longitude
+                } else {
+                    25.0173 to 121.5397
+                }
+
+                if (kw.isNotBlank() && _includeTwLiveSource.value) {
+                    ExternalCamSearchClient.geocodePlace(kw)?.let { geocoded ->
+                        lat = geocoded.first
+                        lon = geocoded.second
+                    }
+                }
+
+                val combined = ArrayList<ExternalSearchCandidate>()
+                if (_includeTwLiveSource.value) {
+                    combined.addAll(
+                        ExternalCamSearchClient.searchTwLiveNearby(
+                            lat = lat,
+                            lon = lon,
+                            radiusMeters = settings.searchRadiusMeters,
+                            keywordFilter = kw,
+                        )
+                    )
+                }
+                if (_includeYouTubeSource.value) {
+                    val ytQuery = kw.ifBlank { selectedAnchor?.name ?: "台北 即時影像" }
+                    combined.addAll(
+                        ExternalCamSearchClient.searchYouTubeLive(
+                            keyword = ytQuery,
+                            anchorLat = lat,
+                            anchorLon = lon,
+                        )
+                    )
+                }
+                _externalSearchResults.value = combined
+                logger.info("Search", "EXTERNAL_SEARCH", "kw='$kw' results=${combined.size}")
+                if (combined.isEmpty() && !_includeLocalSource.value) {
+                    showBanner("未搜尋到符合的外部即時影像，請嘗試調整關鍵字或半徑")
+                }
+            } finally {
+                _isSearchingExternal.value = false
+            }
+        }
+    }
+
+    fun playOrSaveExternalCandidate(candidate: ExternalSearchCandidate, saveAsFavorite: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val allowLan = prefsRepo.settings.value.allowLocalLanHttp
+            val resolved: CameraItem? = if (candidate.twLiveDeviceId != null) {
+                ExternalCamSearchClient.resolveTwLiveCamera(
+                    deviceId = candidate.twLiveDeviceId,
+                    fallbackLat = candidate.latitude,
+                    fallbackLon = candidate.longitude,
+                    allowPrivateLanHttp = allowLan,
+                )
+            } else if (!candidate.directStreamUrl.isNullOrBlank()) {
+                val check = StreamSecuritySanitizer.sanitizeStreamUrl(candidate.directStreamUrl, allowLan)
+                if (check.isAllowed) {
+                    CameraItem(
+                        id = candidate.id,
+                        title = candidate.title,
+                        region = "YouTube 搜尋",
+                        city = candidate.sourceBadge,
+                        category = "直播搜尋",
+                        streamUrl = check.normalizedUrl,
+                        thumbnailUrl = candidate.thumbnailUrl,
+                        latitude = candidate.latitude,
+                        longitude = candidate.longitude,
+                        sourceName = candidate.sourceBadge,
+                        isFavorite = saveAsFavorite,
+                        sortOrder = activeCameras.value.size + 1,
+                    )
+                } else {
+                    null
+                }
+            } else {
+                null
+            }
+
+            if (resolved == null) {
+                showBanner("無法解析該鏡頭串流網址（或遭資安規則攔截）")
+                return@launch
+            }
+
+            val existing = activeCameras.value.firstOrNull { it.id == resolved.id }
+            val toSave = resolved.copy(
+                isFavorite = saveAsFavorite || (existing?.isFavorite == true),
+                sortOrder = existing?.sortOrder ?: (activeCameras.value.size + 1),
+            )
+            dao.upsert(CameraEntity.fromDomain(toSave))
+            _selectedCameraId.value = toSave.id
+            logger.info("Search", "OPEN_CANDIDATE", "Opened ${toSave.id} (${toSave.title}) fav=${toSave.isFavorite}")
+            if (saveAsFavorite) {
+                showBanner("已收藏並播放：${toSave.title}")
+            }
+        }
     }
 
     fun toggleFavorite(camera: CameraItem) {
@@ -248,6 +400,28 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val allowLan = prefsRepo.settings.value.allowLocalLanHttp
+            val twLiveId = ExternalSearchParsers.extractTwLiveDeviceIdFromUrl(rawUrl)
+            if (twLiveId != null) {
+                val resolvedTw = ExternalCamSearchClient.resolveTwLiveCamera(
+                    deviceId = twLiveId,
+                    allowPrivateLanHttp = allowLan,
+                )
+                if (resolvedTw == null) {
+                    showBanner("無法從 tw.live 解析此攝影機串流")
+                    return@launch
+                }
+                val finalTw = resolvedTw.copy(
+                    title = StreamSecuritySanitizer.sanitizeLabel(rawTitle).ifBlank { resolvedTw.title },
+                    isFavorite = markFavorite,
+                    sortOrder = activeCameras.value.size + 1,
+                )
+                dao.upsert(CameraEntity.fromDomain(finalTw))
+                _selectedCameraId.value = finalTw.id
+                logger.info("Camera", "ADD_TWLIVE", "Added ${finalTw.id} (${finalTw.title})")
+                showBanner("已解析並新增 tw.live 影像：${finalTw.title}")
+                return@launch
+            }
+
             val urlCheck = StreamSecuritySanitizer.sanitizeStreamUrl(rawUrl, allowLan)
             if (!urlCheck.isAllowed) {
                 logger.warn("Security", "ADD_BLOCKED", "Blocked URL: ${urlCheck.blockReason}")
