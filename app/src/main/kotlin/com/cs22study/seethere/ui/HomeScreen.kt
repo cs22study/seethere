@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,9 +28,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
@@ -85,9 +90,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -327,6 +337,8 @@ fun SeeThereHomeScreen(
                         camera = selectedCamera,
                         trafficSaverMode = settings.trafficSaverMode,
                         onExitFullscreen = { isFullscreen = false },
+                        onSwipeNext = { vm.stepFavoriteCamera(+1) },
+                        onSwipePrev = { vm.stepFavoriteCamera(-1) },
                         onScreenshot = { onTriggerScreenshot(selectedCamera, PlayerViewMode.SINGLE) },
                         onSwitchBackup = { vm.selectBackupFor(it) },
                         onLogEvent = { evt, msg -> vm.logger.warn("Player", evt, msg) },
@@ -413,6 +425,8 @@ fun SeeThereHomeScreen(
                                         vm.selectCamera(it)
                                         isFullscreen = true
                                     },
+                                    onSwipeNext = { vm.stepFavoriteCamera(+1) },
+                                    onSwipePrev = { vm.stepFavoriteCamera(-1) },
                                     onToggleFullscreen = { isFullscreen = true },
                                     onSwitchBackup = { vm.selectBackupFor(it) },
                                     onLogEvent = { evt, msg -> vm.logger.warn("Player", evt, msg) },
@@ -437,6 +451,8 @@ fun SeeThereHomeScreen(
                                     vm.selectCamera(it)
                                     isFullscreen = true
                                 },
+                                onSwipeNext = { vm.stepFavoriteCamera(+1) },
+                                onSwipePrev = { vm.stepFavoriteCamera(-1) },
                                 onToggleFullscreen = { isFullscreen = true },
                                 onSwitchBackup = { vm.selectBackupFor(it) },
                                 onLogEvent = { evt, msg -> vm.logger.warn("Player", evt, msg) },
@@ -530,6 +546,8 @@ private fun PlayerViewportSection(
     activeCameras: List<CameraItem>,
     trafficSaverMode: Boolean,
     onSelectAndFullscreen: (CameraItem) -> Unit,
+    onSwipeNext: () -> Unit,
+    onSwipePrev: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onSwitchBackup: (CameraItem) -> Unit,
     onLogEvent: (String, String) -> Unit,
@@ -550,6 +568,8 @@ private fun PlayerViewportSection(
         CompactPlayerCard(
             camera = selectedCamera,
             trafficSaverMode = trafficSaverMode,
+            onSwipeNext = onSwipeNext,
+            onSwipePrev = onSwipePrev,
             onToggleFullscreen = onToggleFullscreen,
             onSwitchBackup = onSwitchBackup,
             onLogEvent = onLogEvent,
@@ -628,10 +648,37 @@ private fun QuadWallGrid(
     }
 }
 
+private fun Modifier.horizontalCameraSwipe(
+    onSwipeNext: () -> Unit,
+    onSwipePrev: () -> Unit,
+): Modifier = pointerInput(onSwipeNext, onSwipePrev) {
+    awaitPointerEventScope {
+        while (true) {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val startX = down.position.x
+            val startY = down.position.y
+            var triggered = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                val dx = change.position.x - startX
+                val dy = change.position.y - startY
+                if (!triggered && kotlin.math.abs(dx) > 72f && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.4f) {
+                    triggered = true
+                    if (dx < 0f) onSwipeNext() else onSwipePrev()
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun CompactPlayerCard(
     camera: CameraItem?,
     trafficSaverMode: Boolean,
+    onSwipeNext: () -> Unit,
+    onSwipePrev: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onSwitchBackup: (CameraItem) -> Unit,
     onLogEvent: (String, String) -> Unit,
@@ -644,7 +691,8 @@ private fun CompactPlayerCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f),
+                    .aspectRatio(16f / 9f)
+                    .horizontalCameraSwipe(onSwipeNext = onSwipeNext, onSwipePrev = onSwipePrev),
             ) {
                 StreamPlayerBox(
                     camera = camera,
@@ -679,7 +727,7 @@ private fun CompactPlayerCard(
                         modifier = Modifier.weight(1f),
                     )
                     Text(
-                        camera.sourceName,
+                        "左右滑換台 · ${camera.sourceName}",
                         color = Color(0xFF38BDF8),
                         style = MaterialTheme.typography.labelSmall,
                     )
@@ -694,11 +742,18 @@ private fun FullscreenPlayerOverlay(
     camera: CameraItem?,
     trafficSaverMode: Boolean,
     onExitFullscreen: () -> Unit,
+    onSwipeNext: () -> Unit,
+    onSwipePrev: () -> Unit,
     onScreenshot: () -> Unit,
     onSwitchBackup: (CameraItem) -> Unit,
     onLogEvent: (String, String) -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .horizontalCameraSwipe(onSwipeNext = onSwipeNext, onSwipePrev = onSwipePrev),
+    ) {
         StreamPlayerBox(
             camera = camera,
             trafficSaverMode = trafficSaverMode,
@@ -750,6 +805,7 @@ private fun TabContentBody(
             activeCameras = activeCameras,
             selectedCameraId = selectedCamera?.id,
             onSelectCamera = { vm.selectCamera(it) },
+            onStepInPool = { pool, delta -> vm.stepFromPool(pool, delta) },
             onToggleFavorite = { vm.toggleFavorite(it) },
             onSoftDelete = { vm.softDeleteCamera(it) },
             onExitApp = onExitApp,
@@ -806,6 +862,7 @@ private fun FavoritesTabContent(
     activeCameras: List<CameraItem>,
     selectedCameraId: String?,
     onSelectCamera: (CameraItem) -> Unit,
+    onStepInPool: (List<CameraItem>, Int) -> Unit,
     onToggleFavorite: (CameraItem) -> Unit,
     onSoftDelete: (CameraItem) -> Unit,
     onExitApp: () -> Unit,
@@ -813,12 +870,58 @@ private fun FavoritesTabContent(
     var showAll by remember { mutableStateOf(false) }
     val favorites = remember(activeCameras) { activeCameras.filter { it.isFavorite } }
     val displayed = if (showAll || favorites.isEmpty()) activeCameras else favorites
+    val activeIdx = displayed.indexOfFirst { it.id == selectedCameraId }.let { if (it >= 0) it + 1 else 1 }
+    val currentTitle = displayed.firstOrNull { it.id == selectedCameraId }?.title
+        ?: displayed.firstOrNull()?.title
+        ?: "尚無鏡頭"
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 12.dp),
     ) {
         item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF162033)),
+                border = BorderStroke(1.dp, Color(0xFF334155)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    IconButton(
+                        onClick = { onStepInPool(displayed, -1) },
+                        enabled = displayed.size > 1,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "上一支鏡頭",
+                            tint = Color(0xFFFACC15),
+                        )
+                    }
+                    Text(
+                        text = if (displayed.isEmpty()) currentTitle else "$activeIdx / ${displayed.size} · $currentTitle",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                    )
+                    IconButton(
+                        onClick = { onStepInPool(displayed, +1) },
+                        enabled = displayed.size > 1,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "下一支鏡頭",
+                            tint = Color(0xFFFACC15),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -889,6 +992,13 @@ private fun NearbyTabContent(
     val filteredLocal by vm.filteredLocalCameras.collectAsState()
     val externalResults by vm.externalSearchResults.collectAsState()
     val isSearching by vm.isSearchingExternal.collectAsState()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val submitSearch = {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        vm.runNearbyAndKeywordSearch()
+    }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -904,12 +1014,14 @@ private fun NearbyTabContent(
                 OutlinedTextField(
                     value = searchKeyword,
                     onValueChange = { vm.updateSearchKeyword(it) },
-                    label = { Text("關鍵字/地點 (例: 台大、淡水、東京)") },
+                    label = { Text("關鍵字/地點 (例: 公館商圈、淡水)") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { submitSearch() }),
                     modifier = Modifier.weight(1f),
                 )
                 Button(
-                    onClick = { vm.runNearbyAndKeywordSearch() },
+                    onClick = submitSearch,
                     enabled = !isSearching,
                 ) {
                     if (isSearching) {

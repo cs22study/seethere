@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs22study.seethere.core.CameraCodec
 import com.cs22study.seethere.core.CameraItem
+import com.cs22study.seethere.core.CameraNavigator
 import com.cs22study.seethere.core.CorridorCameraResult
 import com.cs22study.seethere.core.ExternalSearchParsers
 import com.cs22study.seethere.core.GeoSpatialEngine
@@ -177,14 +178,19 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
         logger.info("Player", "SELECT_CAMERA", "Selected ${camera.id} (${camera.title})")
     }
 
-    fun stepCarouselNext() {
+    fun stepCarouselNext() = stepFavoriteCamera(+1)
+
+    fun stepFavoriteCamera(delta: Int) {
         val cams = activeCameras.value
         val favs = cams.filter { it.isFavorite }
-        val pool = if (favs.size >= 2) favs else cams
-        if (pool.isEmpty()) return
-        val currentIdx = pool.indexOfFirst { it.id == selectedCamera.value?.id }
-        val next = pool[(currentIdx + 1) % pool.size]
-        _selectedCameraId.value = next.id
+        val pool = if (favs.isNotEmpty()) favs else cams
+        stepFromPool(pool, delta)
+    }
+
+    fun stepFromPool(pool: List<CameraItem>, delta: Int) {
+        val target = CameraNavigator.stepCamera(pool, selectedCamera.value?.id, delta) ?: return
+        _selectedCameraId.value = target.id
+        logger.info("Player", "STEP_CAMERA", "Switched to ${target.id} (${target.title})")
     }
 
     fun setCorridorStartAnchor(anchorId: String) {

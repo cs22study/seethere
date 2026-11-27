@@ -29,3 +29,17 @@
 4. **實機與自動化驗證**：
    - `apksigner verify` 確認 `v0.3.1` Release APK 簽章驗證通過（`v2 scheme: true`，且封裝內含 `META-INF/CERT.SF` / `CERT.RSA` / `MANIFEST.MF`，體積約 `2.3 MB`）。
    - 已透過 `adb` 成功安裝（`versionCode=5`, `versionName=0.3.1`）並啟動於 **OPPO R11s Plus（CPH1721）**，無閃退且實測當 `BOT079` HLS 異常時自動切換顯示即時路況快照。
+
+---
+
+## 3. `v0.3.2` 實機操作體驗優化
+
+依據 OPPO R11s Plus 實機測試回饋，完成以下三項改進：
+1. **單鏡／全螢幕左右滑動切換我的最愛鏡頭**：
+   - 新增純 Kotlin 循環切換器 [CameraNavigator.kt](../core-stream/src/main/kotlin/com/cs22study/seethere/core/CameraNavigator.kt)（含 `CameraNavigatorTest` 單元測試）。
+   - 於 [HomeScreen.kt](../app/src/main/kotlin/com/cs22study/seethere/ui/HomeScreen.kt) 實作 `PointerEventPass.Initial` 水平滑動手勢識別器，可直接在 `PlayerView` 與 YouTube `WebView` 上左滑（下一支）／右滑（上一支）。
+2. **「我的最愛／全部示範清單」上方新增 `◀ / ▶` 切換列**：
+   - 直接以左右箭頭循序切換目前檢視清單內的鏡頭，並顯示當前序號與鏡頭名稱。
+3. **附近關鍵字搜尋自動收合鍵盤**：
+   - 綁定 `LocalSoftwareKeyboardController`、`LocalFocusManager` 與 `ImeAction.Search`，點擊「搜尋」鈕或鍵盤搜尋鍵時立即清除焦點並隱藏輸入法鍵盤。
+4. **建置與簽章**：`v0.3.2` Release APK（`versionCode=6`）已使用同一把持久化金鑰 `seethere-release.jks` 完成建置與 `25` 項單元測試全數通過（待手機重新連線或透過「飛航模式＋檔案管理」即可原地覆蓋升級）。
