@@ -1,7 +1,9 @@
 package com.cs22study.seethere.ui
 
+import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -96,12 +98,14 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.cs22study.seethere.core.CameraItem
+import com.cs22study.seethere.core.CameraNavigator
 import com.cs22study.seethere.core.CorridorCameraResult
 import com.cs22study.seethere.core.GeoSpatialEngine
 import com.cs22study.seethere.core.LocationAnchor
@@ -122,6 +126,7 @@ fun SeeThereHomeScreen(
     hasLocationPermission: Boolean,
     onRequestLocation: () -> Unit,
     onTriggerScreenshot: (CameraItem?, PlayerViewMode) -> Unit,
+    onWithDocumentsPermission: (() -> Unit) -> Unit = { it() },
     onExitApp: () -> Unit,
 ) {
     val activeCameras by vm.activeCameras.collectAsState()
@@ -135,6 +140,9 @@ fun SeeThereHomeScreen(
     val settings by vm.prefsRepo.settings.collectAsState()
     val bannerMessage by vm.bannerMessage.collectAsState()
     val recentLogs by vm.recentLogs.collectAsState()
+    val quadPageIndex by vm.quadPageIndex.collectAsState()
+    val lanServerUrl by vm.lanServerUrl.collectAsState()
+    val lastSettingsNotice by vm.lastSettingsNotice.collectAsState()
     val latestScreenshot by ScreenCaptureBus.latest.collectAsState()
     val captureError by ScreenCaptureBus.error.collectAsState()
 
@@ -407,6 +415,7 @@ fun SeeThereHomeScreen(
                                     hasLocationPermission = hasLocationPermission,
                                     vm = vm,
                                     onRequestLocation = onRequestLocation,
+                                    onWithDocumentsPermission = onWithDocumentsPermission,
                                     onExitApp = onExitApp,
                                 )
                             }
@@ -420,11 +429,14 @@ fun SeeThereHomeScreen(
                                     viewMode = playerViewMode,
                                     selectedCamera = selectedCamera,
                                     activeCameras = activeCameras,
+                                    quadPageIndex = quadPageIndex,
                                     trafficSaverMode = settings.trafficSaverMode,
                                     onSelectAndFullscreen = {
                                         vm.selectCamera(it)
                                         isFullscreen = true
                                     },
+                                    onQuadNextPage = { vm.stepQuadPage(+1) },
+                                    onQuadPrevPage = { vm.stepQuadPage(-1) },
                                     onSwipeNext = { vm.stepFavoriteCamera(+1) },
                                     onSwipePrev = { vm.stepFavoriteCamera(-1) },
                                     onToggleFullscreen = { isFullscreen = true },
@@ -446,11 +458,14 @@ fun SeeThereHomeScreen(
                                 viewMode = playerViewMode,
                                 selectedCamera = selectedCamera,
                                 activeCameras = activeCameras,
+                                quadPageIndex = quadPageIndex,
                                 trafficSaverMode = settings.trafficSaverMode,
                                 onSelectAndFullscreen = {
                                     vm.selectCamera(it)
                                     isFullscreen = true
                                 },
+                                onQuadNextPage = { vm.stepQuadPage(+1) },
+                                onQuadPrevPage = { vm.stepQuadPage(-1) },
                                 onSwipeNext = { vm.stepFavoriteCamera(+1) },
                                 onSwipePrev = { vm.stepFavoriteCamera(-1) },
                                 onToggleFullscreen = { isFullscreen = true },
@@ -475,6 +490,7 @@ fun SeeThereHomeScreen(
                                 hasLocationPermission = hasLocationPermission,
                                 vm = vm,
                                 onRequestLocation = onRequestLocation,
+                                onWithDocumentsPermission = onWithDocumentsPermission,
                                 onExitApp = onExitApp,
                             )
                         }
@@ -544,8 +560,11 @@ private fun PlayerViewportSection(
     viewMode: PlayerViewMode,
     selectedCamera: CameraItem?,
     activeCameras: List<CameraItem>,
+    quadPageIndex: Int,
     trafficSaverMode: Boolean,
     onSelectAndFullscreen: (CameraItem) -> Unit,
+    onQuadNextPage: () -> Unit,
+    onQuadPrevPage: () -> Unit,
     onSwipeNext: () -> Unit,
     onSwipePrev: () -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -553,13 +572,17 @@ private fun PlayerViewportSection(
     onLogEvent: (String, String) -> Unit,
 ) {
     if (viewMode == PlayerViewMode.QUAD_2X2) {
-        val quadList = remember(activeCameras) {
-            val favs = activeCameras.filter { it.isFavorite }
-            (favs + activeCameras.filterNot { it.isFavorite }).take(4)
+        val totalPages = remember(activeCameras) { CameraNavigator.totalQuadPages(activeCameras, 4) }
+        val (safePage, quadList) = remember(activeCameras, quadPageIndex) {
+            CameraNavigator.getQuadPage(activeCameras, quadPageIndex, 4)
         }
         QuadWallGrid(
             cameras = quadList,
+            currentPage = safePage,
+            totalPages = totalPages,
             trafficSaverMode = trafficSaverMode,
+            onQuadNextPage = onQuadNextPage,
+            onQuadPrevPage = onQuadPrevPage,
             onFullscreenCamera = onSelectAndFullscreen,
             onSwitchBackup = onSwitchBackup,
             onLogEvent = onLogEvent,
@@ -580,7 +603,11 @@ private fun PlayerViewportSection(
 @Composable
 private fun QuadWallGrid(
     cameras: List<CameraItem>,
+    currentPage: Int,
+    totalPages: Int,
     trafficSaverMode: Boolean,
+    onQuadNextPage: () -> Unit,
+    onQuadPrevPage: () -> Unit,
     onFullscreenCamera: (CameraItem) -> Unit,
     onSwitchBackup: (CameraItem) -> Unit,
     onLogEvent: (String, String) -> Unit,
@@ -589,7 +616,50 @@ private fun QuadWallGrid(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
         border = BorderStroke(1.dp, Color(0xFF1E293B)),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(4.dp)) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+                .padding(4.dp)
+                .horizontalCameraSwipe(onSwipeNext = onQuadNextPage, onSwipePrev = onQuadPrevPage),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF0F172A), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                IconButton(
+                    onClick = onQuadPrevPage,
+                    enabled = totalPages > 1,
+                    modifier = Modifier.size(30.dp),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "上一組 4 格",
+                        tint = Color(0xFFFACC15),
+                    )
+                }
+                Text(
+                    text = "四宮格 第 ${currentPage + 1}/$totalPages 頁（左右滑或按箭頭換 4 格）",
+                    color = Color(0xFFCBD5E1),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                IconButton(
+                    onClick = onQuadNextPage,
+                    enabled = totalPages > 1,
+                    modifier = Modifier.size(30.dp),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "下一組 4 格",
+                        tint = Color(0xFFFACC15),
+                    )
+                }
+            }
             for (rowIdx in 0..1) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -798,8 +868,12 @@ private fun TabContentBody(
     hasLocationPermission: Boolean,
     vm: SeeThereViewModel,
     onRequestLocation: () -> Unit,
+    onWithDocumentsPermission: (() -> Unit) -> Unit,
     onExitApp: () -> Unit,
 ) {
+    val lanServerUrl by vm.lanServerUrl.collectAsState()
+    val lastSettingsNotice by vm.lastSettingsNotice.collectAsState()
+
     when (tab) {
         HomeTab.FAVORITES -> FavoritesTabContent(
             activeCameras = activeCameras,
@@ -836,22 +910,36 @@ private fun TabContentBody(
         )
         HomeTab.ADD_IMPORT -> AddImportTabContent(
             deletedCameras = deletedCameras,
+            defaultLanPort = settings.lanServerPort,
+            lanServerUrl = lanServerUrl,
             onAddSingle = { title, url, region, city, lat, lon, fav ->
                 vm.addSingleCamera(title, url, region, city, lat, lon, fav)
             },
             onImportCsv = { vm.importCsvText(it) },
-            onExportCsv = { vm.buildExportCsv() },
+            onExportCsvToDocuments = { onCsvTextReady ->
+                onWithDocumentsPermission {
+                    vm.exportCsvToDocuments(onCsvTextReady)
+                }
+            },
+            onStartLanServer = { portStr -> vm.startLanServer(portStr) },
+            onStopLanServer = { vm.stopLanServer() },
             onRestore = { vm.restoreCamera(it) },
             onPurge = { vm.purgeCamera(it) },
         )
         HomeTab.SETTINGS_LOGS -> SettingsLogsTabContent(
             settings = settings,
             recentLogs = recentLogs,
+            logPathHint = vm.logger.getStoragePathHint(),
+            lastNotice = lastSettingsNotice,
+            lanServerUrl = lanServerUrl,
             onToggleCornerLabel = { vm.prefsRepo.setScreenshotCornerLabelEnabled(it) },
             onToggleLanHttp = { vm.prefsRepo.setAllowLocalLanHttp(it) },
             onToggleTrafficSaver = { vm.prefsRepo.setTrafficSaverMode(it) },
-            onExportLogs = { vm.exportLogsToDocuments() },
-            onRefreshLogs = { vm.refreshLogs() },
+            onExportLogs = {
+                onWithDocumentsPermission { vm.exportLogsToDocuments() }
+            },
+            onRefreshLogs = { vm.refreshLogs(notifyUser = true) },
+            onClearLogs = { vm.clearLocalLogs() },
             onExitApp = onExitApp,
         )
     }
@@ -994,9 +1082,25 @@ private fun NearbyTabContent(
     val isSearching by vm.isSearchingExternal.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
-    val submitSearch = {
-        focusManager.clearFocus()
+    val context = LocalContext.current
+    val localView = LocalView.current
+
+    val hideKeyboard: () -> Unit = {
+        focusManager.clearFocus(force = true)
+        localView.clearFocus()
         keyboardController?.hide()
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(localView.windowToken, 0)
+    }
+
+    LaunchedEffect(isSearching) {
+        if (isSearching) {
+            hideKeyboard()
+        }
+    }
+
+    val submitSearch = {
+        hideKeyboard()
         vm.runNearbyAndKeywordSearch()
     }
 
@@ -1244,9 +1348,13 @@ private fun ExternalCandidateCard(
 @Composable
 private fun AddImportTabContent(
     deletedCameras: List<CameraItem>,
+    defaultLanPort: Int,
+    lanServerUrl: String?,
     onAddSingle: (String, String, String, String, String, String, Boolean) -> Unit,
     onImportCsv: (String) -> Unit,
-    onExportCsv: () -> String,
+    onExportCsvToDocuments: ((String) -> Unit) -> Unit,
+    onStartLanServer: (String) -> Unit,
+    onStopLanServer: () -> Unit,
     onRestore: (CameraItem) -> Unit,
     onPurge: (CameraItem) -> Unit,
 ) {
@@ -1258,11 +1366,53 @@ private fun AddImportTabContent(
     var lon by remember { mutableStateOf("121.5397") }
     var fav by remember { mutableStateOf(true) }
     var csvBox by remember { mutableStateOf("") }
+    var portText by remember(defaultLanPort) { mutableStateOf(defaultLanPort.toString()) }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // LAN Web Admin Server (same Wi-Fi import/export/add via browser, adapted from fork620)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF162033)),
+            border = BorderStroke(1.dp, if (lanServerUrl != null) Color(0xFF4ADE80) else Color(0xFF334155)),
+        ) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("同網域區網瀏覽器新增 / 匯入 / 匯出 (fork620 模式)", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (lanServerUrl != null) {
+                        "✅ 區網後台已啟動，請在同一 Wi-Fi 的電腦或手機瀏覽器開啟：\n$lanServerUrl"
+                    } else {
+                        "指定 Port 後啟動區網後台，免在手機/電視盒小螢幕打字（僅限內網 IP 存取）。"
+                    },
+                    color = if (lanServerUrl != null) Color(0xFF4ADE80) else Color(0xFF94A3B8),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = portText,
+                        onValueChange = { portText = it.filter { ch -> ch.isDigit() }.take(5) },
+                        label = { Text("指定 Port") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (lanServerUrl == null) {
+                        Button(onClick = { onStartLanServer(portText) }) {
+                            Text("啟動區網管理")
+                        }
+                    } else {
+                        OutlinedButton(onClick = onStopLanServer) {
+                            Text("停止服務", color = Color(0xFFF87171))
+                        }
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(color = Color(0xFF334155), modifier = Modifier.padding(vertical = 4.dp))
         Text("單筆新增即時影像（支援 .m3u8 / MJPEG / YouTube / tw.live/cam/?id=）", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
         OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("串流、YouTube 或 tw.live 網址 (HTTPS)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("鏡頭名稱（YouTube 可留空自動抓取）") }, modifier = Modifier.fillMaxWidth())
@@ -1287,7 +1437,7 @@ private fun AddImportTabContent(
         }
 
         HorizontalDivider(color = Color(0xFF334155), modifier = Modifier.padding(vertical = 6.dp))
-        Text("批次 CSV 匯入 / 匯出（含 XSS / SSRF / 公式注入防護）", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+        Text("批次 CSV 匯入 / 匯出存檔至 Documents/SeeThere/", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
         OutlinedTextField(
             value = csvBox,
             onValueChange = { csvBox = it },
@@ -1300,8 +1450,11 @@ private fun AddImportTabContent(
             Button(onClick = { onImportCsv(csvBox) }, modifier = Modifier.weight(1f)) {
                 Text("匯入 CSV")
             }
-            OutlinedButton(onClick = { csvBox = onExportCsv() }, modifier = Modifier.weight(1f)) {
-                Text("產出現有清單 CSV")
+            OutlinedButton(
+                onClick = { onExportCsvToDocuments { csvBox = it } },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("匯出至 Documents")
             }
         }
 
@@ -1336,17 +1489,36 @@ private fun AddImportTabContent(
 private fun SettingsLogsTabContent(
     settings: UserSettings,
     recentLogs: List<String>,
+    logPathHint: String,
+    lastNotice: String,
+    lanServerUrl: String?,
     onToggleCornerLabel: (Boolean) -> Unit,
     onToggleLanHttp: (Boolean) -> Unit,
     onToggleTrafficSaver: (Boolean) -> Unit,
     onExportLogs: () -> Unit,
     onRefreshLogs: () -> Unit,
+    onClearLogs: () -> Unit,
     onExitApp: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF162033)),
+            border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+        ) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("系統設定與日誌操作狀態", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                Text(lastNotice, color = Color(0xFFFACC15), style = MaterialTheme.typography.bodySmall)
+                Text("目前累積日誌：${recentLogs.size} 筆（14 天滾動留存，單檔 2MB）", color = Color(0xFFCBD5E1), style = MaterialTheme.typography.labelSmall)
+                Text("本機日誌路徑：$logPathHint", color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall)
+                if (lanServerUrl != null) {
+                    Text("區網後台運行中：$lanServerUrl", color = Color(0xFF4ADE80), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+
         SettingSwitchRow(
             title = "截圖角落標註攝影機名稱＋時間",
             subtitle = "開啟後將於首頁截圖左下角自動標註當前鏡頭與拍攝時刻",
@@ -1369,17 +1541,27 @@ private fun SettingsLogsTabContent(
         HorizontalDivider(color = Color(0xFF334155))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onExportLogs, modifier = Modifier.weight(1f)) {
-                Text("匯出本機記錄檔 (.jsonl)")
+                Text("匯出至 Documents")
             }
             OutlinedButton(onClick = onRefreshLogs, modifier = Modifier.weight(1f)) {
                 Text("重新載入日誌")
             }
         }
+        OutlinedButton(
+            onClick = onClearLogs,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("清除本機舊日誌")
+        }
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))) {
             Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("最近本機紀錄（已過濾敏感字串，14 天滾動留存）", color = Color(0xFF38BDF8), style = MaterialTheme.typography.labelMedium)
-                recentLogs.take(20).forEach { line ->
-                    Text(line, color = Color(0xFFCBD5E1), style = MaterialTheme.typography.labelSmall)
+                Text("最近本機紀錄（已過濾敏感字串，最多顯示最新 20 筆）", color = Color(0xFF38BDF8), style = MaterialTheme.typography.labelMedium)
+                if (recentLogs.isEmpty()) {
+                    Text("目前尚無紀錄，操作或切換鏡頭後將自動產生 JSONL 紀錄。", color = Color(0xFF94A3B8), style = MaterialTheme.typography.labelSmall)
+                } else {
+                    recentLogs.take(20).forEach { line ->
+                        Text(line, color = Color(0xFFCBD5E1), style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         }

@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs22study.seethere.core.CameraItem
 import com.cs22study.seethere.core.StreamProtocol
 import com.cs22study.seethere.core.StreamSecuritySanitizer
+import com.cs22study.seethere.server.SeeThereLanWebServer
 import com.cs22study.seethere.service.ScreenCaptureService
 import com.cs22study.seethere.service.ScreenshotStorageHelper
 import com.cs22study.seethere.ui.PlayerViewMode
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
 
             var pendingShotCamera by remember { mutableStateOf<CameraItem?>(null) }
+            var pendingStorageAction by remember { mutableStateOf<(() -> Unit)?>(null) }
             var hasLocationPermission by remember { mutableStateOf(checkLocationPermission()) }
 
             val locationLauncher = rememberLauncherForActivityResult(
@@ -54,6 +56,24 @@ class MainActivity : ComponentActivity() {
             ) {
                 hasLocationPermission = checkLocationPermission()
                 vm.refreshGpsLocation(hasLocationPermission)
+            }
+
+            val documentsStorageLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission()
+            ) {
+                pendingStorageAction?.invoke()
+                pendingStorageAction = null
+            }
+
+            val runWithDocumentsPermission: (() -> Unit) -> Unit = { action ->
+                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    pendingStorageAction = action
+                    documentsStorageLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                } else {
+                    action()
+                }
             }
 
             val screenCaptureLauncher = rememberLauncherForActivityResult(
@@ -135,7 +155,9 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onTriggerScreenshot = triggerScreenshot,
+                    onWithDocumentsPermission = runWithDocumentsPermission,
                     onExitApp = {
+                        SeeThereLanWebServer.stop()
                         finishAndRemoveTask()
                     },
                 )

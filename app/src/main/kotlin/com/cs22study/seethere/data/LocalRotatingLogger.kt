@@ -1,10 +1,6 @@
 package com.cs22study.seethere.data
 
-import android.content.ContentValues
 import android.content.Context
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import com.cs22study.seethere.core.LogFormatter
 import java.io.File
 import java.time.Instant
@@ -14,13 +10,15 @@ import java.time.format.DateTimeFormatter
 /**
  * Local rotating JSONL logger:
  * - Stores files under app filesDir/logs/ with 2MB file cap & 14-day retention
- * - Supports one-click export to Documents/SeeThere/logs/
+ * - Supports one-click export to Documents/SeeThere/logs/ and clearing old logs
  */
 class LocalRotatingLogger(context: Context) {
 
     private val appContext = context.applicationContext
     private val logsDir = File(appContext.filesDir, "logs").apply { mkdirs() }
     private val lock = Any()
+
+    fun getStoragePathHint(): String = logsDir.absolutePath
 
     fun info(module: String, event: String, message: String) = write("INFO", module, event, message)
     fun warn(module: String, event: String, message: String) = write("WARN", module, event, message)
@@ -54,38 +52,35 @@ class LocalRotatingLogger(context: Context) {
         }
     }
 
-    fun exportAllLogsToPublicDocuments(): Result<String> = runCatching {
-        synchronized(lock) {
+    fun exportAllLogsToPublicDocuments(): Result<String> {
+        val merged = synchronized(lock) {
             val files = logsDir.listFiles { f -> f.isFile && f.name.endsWith(".jsonl") }
                 ?.sortedBy { it.name }
                 ?: emptyList()
-            val merged = buildString {
+            buildString {
                 for (f in files) {
                     append(f.readText(Charsets.UTF_8))
                 }
             }
-            val fileName = "seethere-logs-${LocalDate.now()}.jsonl"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val values = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                    put(MediaStore.Downloads.MIME_TYPE, "application/x-ndjson")
-                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOCUMENTS}/SeeThere/logs")
-                }
-                val resolver = appContext.contentResolver
-                val uri = resolver.insert(MediaStore.Files.getContentUri("external"), values)
-                    ?: error("無法建立公開日誌檔案")
-                resolver.openOutputStream(uri)?.use { out ->
-                    out.write(merged.toByteArray(Charsets.UTF_8))
-                } ?: error("無法寫入公開日誌串流")
-                "Documents/SeeThere/logs/$fileName"
-            } else {
-                @Suppress("DEPRECATION")
-                val docsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-                val outDir = File(docsDir, "SeeThere/logs").apply { mkdirs() }
-                val outFile = File(outDir, fileName)
-                outFile.writeText(merged, Charsets.UTF_8)
-                outFile.absolutePath
+        }
+        val fileName = "seethere-logs-${LocalDate.now()}.jsonl"
+        return PublicDocumentsStorage.writeTextFile(
+            context = appContext,
+            subFolder = "logs",
+            fileName = fileName,
+            mimeType = "application/x-ndjson",
+            content = merged,
+        )
+    }
+
+    fun clearAllLogs(): Int {
+        synchronized(lock) {
+            val files = logsDir.listFiles { f -> f.isFile && f.name.endsWith(".jsonl") } ?: return 0
+            var deleted = 0
+            for (f in files) {
+                if (f.delete()) deleted++
             }
+            return deleted
         }
     }
 

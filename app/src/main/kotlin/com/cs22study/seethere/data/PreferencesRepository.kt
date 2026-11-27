@@ -11,6 +11,7 @@ data class UserSettings(
     val trafficSaverMode: Boolean = false,
     val searchRadiusMeters: Int = 3_000,
     val selectedAnchorId: String = "anchor_ntu",
+    val lanServerPort: Int = 8080,
 )
 
 class PreferencesRepository(context: Context) {
@@ -26,6 +27,7 @@ class PreferencesRepository(context: Context) {
         trafficSaverMode = prefs.getBoolean(KEY_TRAFFIC_SAVER, false),
         searchRadiusMeters = prefs.getInt(KEY_RADIUS_METERS, 3_000),
         selectedAnchorId = prefs.getString(KEY_ANCHOR_ID, "anchor_ntu") ?: "anchor_ntu",
+        lanServerPort = prefs.getInt(KEY_LAN_SERVER_PORT, 8080),
     )
 
     fun setScreenshotCornerLabelEnabled(enabled: Boolean) {
@@ -53,11 +55,17 @@ class PreferencesRepository(context: Context) {
         _settings.value = _settings.value.copy(selectedAnchorId = anchorId)
     }
 
+    fun setLanServerPort(port: Int) {
+        prefs.edit().putInt(KEY_LAN_SERVER_PORT, port).apply()
+        _settings.value = _settings.value.copy(lanServerPort = port)
+    }
+
     companion object {
         private const val KEY_CORNER_LABEL = "screenshot_corner_label_enabled"
         private const val KEY_ALLOW_LAN_HTTP = "allow_local_lan_http"
         private const val KEY_TRAFFIC_SAVER = "traffic_saver_mode"
         private const val KEY_RADIUS_METERS = "search_radius_meters"
         private const val KEY_ANCHOR_ID = "selected_anchor_id"
+        private const val KEY_LAN_SERVER_PORT = "lan_server_port"
     }
 }

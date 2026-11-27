@@ -19,8 +19,10 @@ import com.cs22study.seethere.data.ExternalCamSearchClient
 import com.cs22study.seethere.data.ExternalSearchCandidate
 import com.cs22study.seethere.data.LocalRotatingLogger
 import com.cs22study.seethere.data.PreferencesRepository
+import com.cs22study.seethere.data.PublicDocumentsStorage
 import com.cs22study.seethere.data.db.AppDatabase
 import com.cs22study.seethere.data.db.CameraEntity
+import com.cs22study.seethere.server.SeeThereLanWebServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,11 +32,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 enum class HomeTab {
@@ -106,6 +111,15 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
 
     private val _isSearchingExternal = MutableStateFlow(false)
     val isSearchingExternal: StateFlow<Boolean> = _isSearchingExternal.asStateFlow()
+
+    private val _quadPageIndex = MutableStateFlow(0)
+    val quadPageIndex: StateFlow<Int> = _quadPageIndex.asStateFlow()
+
+    private val _lanServerUrl = MutableStateFlow<String?>(null)
+    val lanServerUrl: StateFlow<String?> = _lanServerUrl.asStateFlow()
+
+    private val _lastSettingsNotice = MutableStateFlow("本機日誌正常記錄中（支援檢視、匯出至 Documents 與清除）")
+    val lastSettingsNotice: StateFlow<String> = _lastSettingsNotice.asStateFlow()
 
     val filteredLocalCameras: StateFlow<List<CameraItem>> = combine(
         activeCameras,
@@ -503,19 +517,182 @@ class SeeThereViewModel(application: Application) : AndroidViewModel(application
 
     fun buildExportCsv(): String = CameraCodec.exportToCsv(activeCameras.value)
 
-    fun exportLogsToDocuments() {
+    fun stepQuadPage(delta: Int) {
+        val total = CameraNavigator.totalQuadPages(activeCameras.value, pageSize = 4)
+        val next = ((_quadPageIndex.value + delta) % total + total) % total
+        _quadPageIndex.value = next
+        logger.info("Player", "QUAD_PAGE", "Switched 2x2 quad wall to page ${next + 1}/$total")
+    }
+
+    fun exportCsvToDocuments(onCsvReady: (String) -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO) {
-            logger.exportAllLogsToPublicDocuments()
-                .onSuccess { path -> showBanner("日誌已匯出至 $path") }
-                .onFailure { ex -> showBanner("匯出日誌失敗：${ex.localizedMessage}") }
-            refreshLogs()
+            val csv = buildExportCsv()
+            withContext(Dispatchers.Main) { onCsvReady(csv) }
+            val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+            val fileName = "seethere-cameras-$stamp.csv"
+            PublicDocumentsStorage.writeTextFile(
+                context = getApplication(),
+                subFolder = "",
+                fileName = fileName,
+                mimeType = "text/csv",
+                content = "\uFEFF$csv",
+            ).onSuccess { path ->
+                logger.info("Export", "CSV_DOCUMENTS", "Exported CSV to $path")
+                _lastSettingsNotice.value = "✅ 已匯出清單至 $path"
+                showBanner("已匯出 CSV 至 $path")
+            }.onFailure { ex ->
+                logger.error("Export", "CSV_FAILED", ex.localizedMessage ?: "unknown")
+                showBanner("匯出 CSV 失敗：${ex.localizedMessage}")
+            }
         }
     }
 
-    fun refreshLogs() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _recentLogs.value = logger.readRecentLines(60)
+    fun startLanServer(portText: String) {
+        val port = portText.trim().toIntOrNull()
+        if (port == null || !CameraNavigator.isValidServerPort(port)) {
+            showBanner("請輸入合法 Port（1024–65535，例如 8080）")
+            return
         }
+        prefsRepo.setLanServerPort(port)
+        viewModelScope.launch(Dispatchers.IO) {
+            val listener = object : SeeThereLanWebServer.Listener {
+                override fun getActiveCameras(): List<CameraItem> = activeCameras.value
+
+                override fun onLanAddCamera(
+                    title: String,
+                    url: String,
+                    region: String,
+                    city: String,
+                    favorite: Boolean,
+                ): Pair<Boolean, String> = runBlocking {
+                    val allowLan = prefsRepo.settings.value.allowLocalLanHttp
+                    val twId = ExternalSearchParsers.extractTwLiveDeviceIdFromUrl(url)
+                    if (twId != null) {
+                        val resolved = ExternalCamSearchClient.resolveTwLiveCamera(twId, allowPrivateLanHttp = allowLan)
+                            ?: return@runBlocking false to "無法從 tw.live 解析串流"
+                        val finalItem = resolved.copy(
+                            title = title.ifBlank { resolved.title },
+                            isFavorite = favorite,
+                            sortOrder = activeCameras.value.size + 1,
+                        )
+                        dao.upsert(CameraEntity.fromDomain(finalItem))
+                        _selectedCameraId.value = finalItem.id
+                        return@runBlocking true to "已新增並播放：${finalItem.title}"
+                    }
+                    val check = StreamSecuritySanitizer.sanitizeStreamUrl(url, allowLan)
+                    if (!check.isAllowed) {
+                        return@runBlocking false to (check.blockReason ?: "資安檢查未通過")
+                    }
+                    var resolvedTitle = title
+                    var thumb = if (check.extractedYouTubeId != null) {
+                        "https://i.ytimg.com/vi/${check.extractedYouTubeId}/hqdefault.jpg"
+                    } else ""
+                    if (resolvedTitle.isBlank() && check.extractedYouTubeId != null) {
+                        fetchYouTubeOEmbed(check.extractedYouTubeId!!)?.let {
+                            resolvedTitle = StreamSecuritySanitizer.sanitizeLabel(it.first)
+                            if (it.second.isNotBlank()) thumb = it.second
+                        }
+                    }
+                    if (resolvedTitle.isBlank()) resolvedTitle = "區網鏡頭 ${activeCameras.value.size + 1}"
+                    val item = CameraItem(
+                        id = "lan_${UUID.randomUUID().toString().take(8)}",
+                        title = resolvedTitle,
+                        region = region.ifBlank { "區網新增" },
+                        city = city.ifBlank { "區網管理" },
+                        category = "區網新增",
+                        streamUrl = check.normalizedUrl,
+                        thumbnailUrl = thumb,
+                        latitude = 25.0173,
+                        longitude = 121.5397,
+                        sourceName = "區網 Web 後台",
+                        isFavorite = favorite,
+                        sortOrder = activeCameras.value.size + 1,
+                        allowLocalHttp = allowLan,
+                    )
+                    dao.upsert(CameraEntity.fromDomain(item))
+                    _selectedCameraId.value = item.id
+                    true to "已新增並播放：${item.title}"
+                }
+
+                override fun onLanImportCsv(csv: String): Pair<Int, Int> = runBlocking {
+                    val allowLan = prefsRepo.settings.value.allowLocalLanHttp
+                    val report = CameraCodec.importFromCsv(csv, allowLan)
+                    if (report.accepted.isNotEmpty()) {
+                        dao.upsertAll(report.accepted.map { CameraEntity.fromDomain(it) })
+                    }
+                    logger.info("LanWeb", "CSV_IMPORT", "accepted=${report.accepted.size} rejected=${report.rejected.size}")
+                    report.accepted.size to report.rejected.size
+                }
+
+                override fun onLanPlayCamera(cameraId: String): Boolean {
+                    val target = activeCameras.value.firstOrNull { it.id == cameraId } ?: return false
+                    _selectedCameraId.value = target.id
+                    return true
+                }
+            }
+
+            SeeThereLanWebServer.start(port, listener)
+                .onSuccess { url ->
+                    _lanServerUrl.value = url
+                    logger.info("LanWeb", "START", "LAN Web Server started at $url")
+                    _lastSettingsNotice.value = "🌐 區網後台已啟動：$url"
+                    showBanner("區網管理已啟動：$url")
+                }
+                .onFailure { ex ->
+                    _lanServerUrl.value = null
+                    showBanner("啟動失敗 (Port $port 可能被佔用)：${ex.localizedMessage}")
+                }
+        }
+    }
+
+    fun stopLanServer() {
+        SeeThereLanWebServer.stop()
+        _lanServerUrl.value = null
+        logger.info("LanWeb", "STOP", "LAN Web Server stopped")
+        _lastSettingsNotice.value = "區網管理伺服器已停止"
+        showBanner("已停止區網管理伺服器")
+    }
+
+    fun exportLogsToDocuments() {
+        viewModelScope.launch(Dispatchers.IO) {
+            logger.exportAllLogsToPublicDocuments()
+                .onSuccess { path ->
+                    _lastSettingsNotice.value = "✅ 日誌已匯出至：$path"
+                    showBanner("日誌已匯出至 $path")
+                }
+                .onFailure { ex ->
+                    _lastSettingsNotice.value = "❌ 匯出日誌失敗：${ex.localizedMessage}"
+                    showBanner("匯出日誌失敗：${ex.localizedMessage}")
+                }
+            refreshLogs(notifyUser = false)
+        }
+    }
+
+    fun refreshLogs(notifyUser: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val lines = logger.readRecentLines(60)
+            _recentLogs.value = lines
+            if (notifyUser) {
+                _lastSettingsNotice.value = "🔄 已重新載入 ${lines.size} 筆本機日誌"
+                showBanner("已重新載入 ${lines.size} 筆本機日誌")
+            }
+        }
+    }
+
+    fun clearLocalLogs() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val removed = logger.clearAllLogs()
+            logger.info("Logs", "CLEAR", "Cleared $removed old log files")
+            val lines = logger.readRecentLines(60)
+            _recentLogs.value = lines
+            _lastSettingsNotice.value = "🧹 已清除 $removed 個舊日誌檔，並重新建立今日紀錄"
+            showBanner("已清除本機舊日誌（$removed 檔）")
+        }
+    }
+
+    override fun onCleared() {
+        SeeThereLanWebServer.stop()
+        super.onCleared()
     }
 
     fun showBanner(msg: String) {
